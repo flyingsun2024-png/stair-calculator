@@ -1,0 +1,2939 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>楼梯分段测算系统 V7.0 - 多梯段整合版</title>
+    
+    <!-- 数学公式渲染 -->
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    
+    <!-- 导出功能所需库 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <style>
+    /* ========== 基础样式 ========== */
+    :root {
+        --primary: #4f46e5;
+        --primary-dark: #4338ca;
+        --secondary: #10b981;
+        --accent: #f59e0b;
+        --light: #f8fafc;
+        --dark: #1e293b;
+        --gray: #64748b;
+        --gray-light: #e2e8f0;
+        --border-radius: 12px;
+        --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    }
+
+    * {
+        box-sizing: border-box;
+    }
+
+    body {
+        font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+        margin: 0;
+        padding: 20px;
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        color: var(--dark);
+        line-height: 1.6;
+        min-height: 100vh;
+    }
+
+    .container {
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+
+    h1 {
+        color: var(--dark);
+        text-align: center;
+        margin-bottom: 30px;
+        font-weight: 800;
+        font-size: 2.5rem;
+        background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        padding: 20px 0;
+        position: relative;
+    }
+
+    h1::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 100px;
+        height: 4px;
+        background: linear-gradient(90deg, var(--primary), var(--secondary));
+        border-radius: 2px;
+    }
+
+    /* ========== 步骤指示器 ========== */
+    .step-indicator {
+        display: flex;
+        margin-bottom: 30px;
+        background: white;
+        border-radius: var(--border-radius);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+    }
+
+    .step-item {
+        flex: 1;
+        text-align: center;
+        padding: 20px;
+        background: var(--light);
+        color: var(--gray);
+        font-weight: bold;
+        transition: all 0.3s ease;
+        cursor: pointer;
+        position: relative;
+    }
+
+    .step-item.active {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        color: white;
+        box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+
+    .step-item.completed {
+        background: linear-gradient(135deg, var(--secondary) 0%, #059669 100%);
+        color: white;
+    }
+
+    /* ========== 步骤内容容器 ========== */
+    .step-box {
+        display: none;
+        animation: fadeIn 0.5s ease;
+    }
+
+    .step-active {
+        display: block;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ========== 多梯段配置样式 ========== */
+    /* 结构卡片样式 */
+    .struct-card { 
+        background: white; 
+        border-radius: var(--border-radius); 
+        padding: 24px; 
+        margin-bottom: 20px;
+        border-left: 10px solid #ccc; 
+        box-shadow: var(--shadow);
+        transition: all 0.3s ease;
+        position: relative;
+    }
+    
+    .struct-card:hover {
+        box-shadow: var(--shadow-lg);
+        transform: translateY(-2px);
+    }
+    
+    .struct-start { border-left-color: var(--primary); }
+    .struct-middle { border-left-color: var(--secondary); }
+    .struct-exit { border-left-color: var(--accent); }
+
+    .card-header {
+        display: flex; 
+        justify-content: space-between; 
+        align-items: center;
+        border-bottom: 1px solid var(--gray-light); 
+        padding-bottom: 15px; 
+        margin-bottom: 20px;
+    }
+
+    .card-header strong {
+        font-size: 1.2rem;
+        color: var(--dark);
+    }
+
+    /* 逻辑顺序标记 */
+    .logic-order {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        width: 30px;
+        height: 30px;
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        font-size: 14px;
+        box-shadow: var(--shadow);
+        z-index: 1;
+    }
+
+    /* 参数网格 - 调整为4列 */
+    .param-inner-grid {
+        display: grid; 
+        grid-template-columns: repeat(4, 1fr); 
+        gap: 20px;
+    }
+    
+    .input-group { 
+        display: flex; 
+        flex-direction: column; 
+    }
+    
+    .input-group label { 
+        font-size: 0.9rem; 
+        margin-bottom: 8px; 
+        color: var(--gray); 
+        font-weight: 600; 
+    }
+    
+    .input-group input { 
+        padding: 12px 16px; 
+        border: 2px solid var(--gray-light); 
+        border-radius: 8px; 
+        font-size: 16px;
+        transition: all 0.3s ease;
+    }
+    
+    .input-group input:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        outline: none;
+    }
+
+    .model-select {
+        padding: 10px 20px;
+        border: 2px solid var(--gray-light);
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        background: white;
+        color: var(--dark);
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    
+    .model-select:hover {
+        border-color: var(--primary);
+    }
+    
+    .model-select:focus {
+        outline: none;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+    }
+
+    /* ========== 按钮样式 ========== */
+    .btn { 
+        padding: 14px 28px; 
+        border-radius: var(--border-radius); 
+        border: none; 
+        cursor: pointer; 
+        font-weight: 700; 
+        transition: all 0.3s ease; 
+        font-size: 16px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+    }
+    
+    .btn-next { 
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%); 
+        color: white; 
+    }
+    
+    .btn-prev {
+        background: linear-gradient(135deg, #64748b 0%, #475569 100%);
+        color: white;
+    }
+    
+    .btn-add { 
+        background: white; 
+        border: 2px dashed var(--gray-light); 
+        color: var(--gray); 
+        margin-right: 10px; 
+    }
+    
+    .btn-add:hover { 
+        border-color: var(--secondary); 
+        color: var(--secondary); 
+    }
+    
+    .btn-section-nav {
+        margin-top: 30px;
+        display: flex;
+        justify-content: space-between;
+    }
+
+    /* ========== v6.1参数配置样式 ========== */
+    .section {
+        border-radius: var(--border-radius);
+        padding: 28px;
+        margin-bottom: 30px;
+        background: white;
+        box-shadow: var(--shadow);
+        transition: all 0.3s ease;
+        border: 1px solid var(--gray-light);
+    }
+    
+    .section:hover {
+        box-shadow: var(--shadow-lg);
+        transform: translateY(-2px);
+    }
+    
+    .form-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+        margin-bottom: 15px;
+    }
+    
+    .form-item {
+        flex: 1 1 calc(33.333% - 14px);
+        min-width: 280px;
+    }
+    
+    .input-group label {
+        font-size: 0.95rem;
+    }
+
+    /* 单选按钮组样式 */
+    .radio-group {
+        display: flex;
+        gap: 20px;
+        margin-bottom: 20px;
+        padding: 20px;
+        border-radius: var(--border-radius);
+        background: var(--light);
+        border: 1px dashed var(--gray-light);
+    }
+    
+    .radio-option {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        padding: 12px 20px;
+        border-radius: 8px;
+        transition: all 0.2s ease;
+    }
+    
+    .radio-option:hover {
+        background: rgba(79, 70, 229, 0.05);
+    }
+    
+    .radio-option input[type="radio"] {
+        width: auto;
+        margin: 0;
+    }
+
+    /* 计算常量输入区域 */
+    #constantsInputArea {
+        flex-wrap: wrap;
+    }
+
+    /* ========== 厚度输入部分专用样式 ========== */
+    .thickness-section {
+        margin-top: 20px;
+    }
+
+    .thickness-category {
+        margin-bottom: 30px;
+        background: #f8fafc;
+        border-radius: var(--border-radius);
+        padding: 24px;
+        border: 1px solid var(--gray-light);
+        transition: all 0.3s ease;
+    }
+
+    .thickness-category:hover {
+        box-shadow: var(--shadow);
+    }
+
+    .thickness-category h3 {
+        margin-top: 0;
+        margin-bottom: 20px;
+        color: var(--dark);
+        font-size: 1.2rem;
+        padding-bottom: 12px;
+        border-bottom: 2px solid var(--primary);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .thickness-category h3::before {
+        content: '';
+        display: block;
+        width: 6px;
+        height: 20px;
+        background: linear-gradient(to bottom, var(--primary), var(--secondary));
+        border-radius: 3px;
+    }
+
+    .thickness-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        gap: 20px;
+    }
+
+    .thickness-item {
+        display: flex;
+        flex-direction: column;
+        padding: 18px;
+        background: white;
+        border-radius: 8px;
+        border: 1px solid var(--gray-light);
+        transition: all 0.2s ease;
+    }
+
+    .thickness-item:hover {
+        border-color: var(--primary);
+        transform: translateY(-2px);
+        box-shadow: var(--shadow);
+    }
+
+    /* ========== 结果展示区域 ========== */
+    #resultArea {
+        margin-top: 40px;
+        padding: 32px;
+        background: white;
+        border-radius: var(--border-radius);
+        box-shadow: var(--shadow);
+        border: 1px solid var(--gray-light);
+    }
+    
+    #resultArea h3 {
+        margin-top: 0;
+        color: var(--dark);
+        font-size: 1.5rem;
+        padding-bottom: 16px;
+        border-bottom: 2px solid var(--gray-light);
+    }
+
+    /* 单梯段结果容器 */
+    .section-result {
+        margin-bottom: 30px;
+        padding: 20px;
+        background: var(--light);
+        border-radius: var(--border-radius);
+        border: 1px solid var(--gray-light);
+    }
+    
+    .section-result-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+        cursor: pointer;
+        padding: 10px 15px;
+        background: white;
+        border-radius: 8px;
+        border: 1px solid var(--gray-light);
+        transition: all 0.3s ease;
+    }
+    
+    .section-result-header:hover {
+        border-color: var(--primary);
+        box-shadow: var(--shadow);
+    }
+    
+    .section-result-content {
+        display: none;
+        padding: 20px;
+        background: white;
+        border-radius: 8px;
+        margin-top: 15px;
+        border: 1px solid var(--gray-light);
+    }
+    
+    .section-result-content.show {
+        display: block;
+        animation: fadeIn 0.3s ease;
+    }
+
+    /* 汇总结果样式 */
+    .summary-result {
+        margin-top: 30px;
+        padding: 25px;
+        background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+        border-radius: var(--border-radius);
+        border: 2px solid var(--primary);
+    }
+    
+    .summary-result h4 {
+        margin-top: 0;
+        color: var(--primary);
+        font-size: 1.3rem;
+        margin-bottom: 20px;
+    }
+
+    /* ========== V6.1 样式复制 ========== */
+    .geometric-output-box {
+        background-color: #f0f9ff;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        border-left: 4px solid var(--primary);
+    }
+    
+    .geometric-output-box h4 {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--dark);
+        margin-top: 0;
+    }
+    
+    .geometric-output-box p {
+        font-size: 1rem !important;
+        margin: 8px 0;
+    }
+
+    /* 钢板用量计算公式样式 */
+    .formula-section {
+        background-color: #f8fafc;
+        padding: 24px;
+        border-radius: var(--border-radius);
+        margin: 25px 0;
+        border: 1px solid var(--gray-light);
+    }
+    
+    .formula-category {
+        margin-bottom: 25px;
+        padding-bottom: 20px;
+        border-bottom: 1px dashed var(--gray-light);
+    }
+    
+    .formula-category:last-child {
+        border-bottom: none;
+    }
+    
+    .formula-category h4 {
+        color: var(--dark);
+        margin-bottom: 20px;
+        padding-bottom: 12px;
+        border-bottom: 2px solid var(--primary);
+        font-size: 1.2rem;
+    }
+    
+    .formula-item {
+        margin-bottom: 20px;
+        padding: 16px;
+        background-color: white;
+        border-radius: 8px;
+        border-left: 4px solid var(--primary);
+        box-shadow: var(--shadow);
+    }
+    
+    .formula-item h5 {
+        margin-top: 0;
+        margin-bottom: 12px;
+        color: var(--dark);
+        font-size: 1.1rem;
+    }
+
+    /* 公式显示/隐藏按钮 */
+    .toggle-button {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 20px;
+        background: linear-gradient(135deg, var(--secondary) 0%, #059669 100%);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 600;
+        margin-bottom: 10px;
+        transition: all 0.3s ease;
+        box-shadow: var(--shadow);
+    }
+    
+    .toggle-button:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-lg);
+    }
+    
+    .formula-container {
+        display: none;
+        text-align: left;
+    }
+    
+    .formula-container.show {
+        display: block;
+        animation: fadeIn 0.5s ease;
+    }
+
+    /* ========== 钢板用量计算表格样式 ========== */
+    .material-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        margin-top: 24px;
+        border-radius: var(--border-radius);
+        overflow: hidden;
+        box-shadow: var(--shadow);
+    }
+    
+    .material-table th, .material-table td {
+        border: 1px solid var(--gray-light);
+        padding: 14px 16px;
+        text-align: center;
+    }
+
+    .material-table th {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        color: white;
+        font-weight: 600;
+        border: none;
+    }
+
+    /* 表头颜色 */
+    .material-table thead th:nth-child(1),
+    .material-table thead th:nth-child(2) {
+        background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+    }
+    
+    .material-table thead th:nth-child(3) {
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    }
+    
+    .material-table thead th:nth-child(4) {
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    }
+
+    /* 行分组背景色 */
+    .material-table tr:nth-child(4n+3) td, 
+    .material-table tr:nth-child(4n+4) td {
+        background-color: #f8fafc;
+    }
+
+    /* 分类列居中垂直对齐，背景色突出 */
+    .material-table td:first-child {
+        text-align: center;
+        vertical-align: middle;
+        font-weight: 700;
+        background: #f1f5f9 !important;
+    }
+
+    /* 名称栏强制靠左对齐 */
+    .material-table td:nth-child(2),
+    .material-table td:nth-child(3) {
+        text-align: center !important;
+    }
+
+    /* 汇总行样式 */
+    .material-table .total-row td {
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+        color: white;
+        font-weight: 700;
+        font-size: 1.1rem;
+    }
+    
+    .total-row .total-label {
+        text-align: center;
+        font-size: 1.2rem;
+    }
+    
+    .total-row .final-weight {
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+        color: white;
+        font-size: 1.3rem;
+        text-align: right !important;
+    }
+
+    /* ========== 导出按钮样式 ========== */
+    .export-buttons {
+        display: flex;
+        gap: 15px;
+        justify-content: center;
+        margin: 30px 0;
+        flex-wrap: wrap;
+    }
+
+    .export-btn {
+        padding: 15px 30px;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 16px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        box-shadow: var(--shadow);
+        transition: all 0.3s ease;
+        min-width: 200px;
+        justify-content: center;
+    }
+
+    .export-btn:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--shadow-lg);
+    }
+
+    .export-btn.excel {
+        background: linear-gradient(135deg, #38a169 0%, #2f855a 100%);
+        color: white;
+    }
+
+    .export-btn.txt {
+        background: linear-gradient(135deg, #805ad5 0%, #6b46c1 100%);
+        color: white;
+    }
+
+    .export-btn .icon {
+        font-size: 20px;
+    }
+
+    /* ========== 加载动画 ========== */
+    .loading {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border: 3px solid rgba(255,255,255,0.3);
+        border-radius: 50%;
+        border-top-color: white;
+        animation: spin 1s ease-in-out infinite;
+        margin-right: 10px;
+    }
+
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    /* ========== 成功提示 ========== */
+    .success-message {
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        color: white;
+        padding: 16px 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        box-shadow: var(--shadow);
+    }
+    
+    .success-message::before {
+        content: '✓';
+        font-weight: bold;
+        font-size: 1.2rem;
+    }
+
+    /* ========== 信息提示 ========== */
+    .info-message {
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        color: white;
+        padding: 15px 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        box-shadow: var(--shadow);
+    }
+    
+    .info-message::before {
+        content: 'ℹ️';
+        font-weight: bold;
+        font-size: 1.2rem;
+    }
+
+    /* ========== 配置顺序提示 ========== */
+    .order-hint {
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        color: white;
+        padding: 15px;
+        border-radius: var(--border-radius);
+        margin-bottom: 20px;
+        font-size: 0.95rem;
+    }
+    
+    .order-hint h4 {
+        margin-top: 0;
+        margin-bottom: 10px;
+        color: white;
+        font-size: 1.1rem;
+    }
+
+    /* ========== 响应式设计 ========== */
+    @media (max-width: 1200px) {
+        .form-item {
+            flex: 1 1 calc(50% - 10px);
+        }
+        
+        .param-inner-grid {
+            grid-template-columns: repeat(3, 1fr);
+        }
+    }
+
+    @media (max-width: 768px) {
+        body {
+            padding: 16px;
+        }
+        
+        .form-item {
+            flex: 1 1 100%;
+        }
+        
+        .param-inner-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        
+        h1 {
+            font-size: 2rem;
+        }
+        
+        .section {
+            padding: 20px;
+        }
+        
+        .radio-group {
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .step-indicator {
+            flex-direction: column;
+        }
+        
+        .step-item {
+            padding: 15px;
+        }
+        
+        #resultArea {
+            padding: 20px;
+        }
+        
+        .thickness-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .export-buttons {
+            flex-direction: column;
+        }
+        
+        .export-btn {
+            min-width: 100%;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .param-inner-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+    </style>
+</head>
+
+<body>
+<div class="container">
+    <h1>楼梯分段测算系统 V7.0 - 多梯段整合版</h1>
+
+    <!-- 步骤指示器 -->
+    <div class="step-indicator">
+        <div class="step-item active" id="step-indicator-1">1. 梯段结构配置</div>
+        <div class="step-item" id="step-indicator-2">2. 公共参数配置</div>
+        <div class="step-item" id="step-indicator-3">3. 计算结果</div>
+        <div class="step-item" id="step-indicator-4">4. 汇总报告</div>
+    </div>
+
+    <!-- 第一步：多梯段配置 -->
+    <div id="step1" class="step-box step-active">
+        <h2>🛠️ 第一步：楼梯梯段结构配置</h2>
+        
+        <!-- 配置顺序提示 -->
+        <div class="order-hint">
+            <h4>📋 配置顺序提示</h4>
+            <p><strong>建议配置顺序：</strong>起步段 → 中间段 → 出口段</p>
+            <p><strong>系统会自动按逻辑顺序排序显示，但建议您按此顺序配置以避免混淆。</strong></p>
+        </div>
+        
+        <div id="structure-list">
+            <!-- 起步段将由JavaScript动态生成 -->
+        </div>
+
+        <div class="btn-section-nav">
+            <div>
+                <button class="btn btn-add" onclick="addNewSection('middle')">➕ 添加中间段</button>
+                <button class="btn btn-add" onclick="addNewSection('exit')">➕ 添加出口段</button>
+            </div>
+            <button class="btn btn-next" onclick="goToStep2()">确认并进入第二步 ➔</button>
+        </div>
+    </div>
+
+    <!-- 第二步：公共参数配置 -->
+    <div id="step2" class="step-box">
+        <h2>📐 第二步：公共参数配置</h2>
+        <p style="color: var(--gray); margin-bottom: 25px;">以下参数为所有梯段共用的计算参数</p>
+        
+        <!-- 楼梯结构参数 -->
+        <div class="section">
+            <h3 style="margin-top: 0; color: var(--primary);">三、楼梯结构参数</h3>
+            
+            <div class="form-row">
+                <div class="form-item">
+                    <label for="outerHandrail">外侧扶手</label>
+                    <select id="outerHandrail">
+                        <option value="singlePlate">单钢板</option>
+                        <option value="glassSlot">玻璃槽</option>
+                        <option value="boxBeam">箱体高梁</option>
+                    </select>
+                </div>
+
+                <div class="form-item">
+                    <label for="innerHandrail">内侧扶手</label>
+                    <select id="innerHandrail">
+                        <option value="singlePlate">单钢板</option>
+                        <option value="glassSlot">玻璃槽</option>
+                        <option value="boxBeam" selected>箱体高梁</option>
+                    </select>
+                </div>
+                <div class="form-item">
+                    <label for="exitLevel">出口平台与地面齐平</label>
+                    <select id="exitLevel">
+                        <option value="yes">是</option>
+                        <option value="no">否</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- 计算常量 -->
+        <div class="section">
+            <h3 style="margin-top: 0; color: var(--secondary);">⚙️ 计算常量（默认/自定义）</h3>
+            
+            <div class="radio-group">
+                <label class="radio-option">
+                    <input type="radio" name="constantsMode" value="default" onchange="switchMode('default', 'constantsInputArea')" checked>
+                    <span>使用默认参数</span>
+                </label>
+                <label class="radio-option">
+                    <input type="radio" name="constantsMode" value="custom" onchange="switchMode('custom', 'constantsInputArea')">
+                    <span>自定义参数</span>
+                </label>
+            </div>
+
+            <div class="form-row" id="constantsInputArea" style="display: none;">
+                <div class="form-item"><label for="materialDensity">钢材密度 ($\rho$)</label><div class="input-group"><input type="number" id="materialDensity" value="7850"><span class="unit-label">kg/m³</span></div></div>
+                <div class="form-item"><label for="weldAllowance">焊缝余量</label><input type="number" step="0.01" id="weldAllowance" value="1.05"></div>
+                <div class="form-item"><label for="safeFactor">安全系数</label><input type="number" step="0.01" id="safeFactor" value="1.20"></div>
+                <div class="form-item"><label for="hanging">下挂</label><div class="input-group"><input type="number" id="hanging" value="130"><span class="unit-label">mm</span></div></div>
+                <div class="form-item"><label for="foldingEdge">折边</label><div class="input-group"><input type="number" id="foldingEdge" value="25"><span class="unit-label">mm</span></div></div>
+                <div class="form-item"><label for="embedMargin">预埋放边</label><div class="input-group"><input type="number" id="embedMargin" value="60"><span class="unit-label">mm</span></div></div>
+                <div class="form-item"><label for="finishThickness">饰面厚度</label><div class="input-group"><input type="number" id="finishThickness" value="50"><span class="unit-label">mm</span></div></div>
+                <div class="form-item"><label for="bottomKeel">封底龙骨</label><div class="input-group"><input type="number" id="bottomKeel" value="40"><span class="unit-label">mm</span></div></div>
+                <div class="form-item"><label for="singlePlateHeight">单钢板前口高度</label><div class="input-group"><input type="number" id="singlePlateHeight" value="1050"><span class="unit-label">mm</span></div></div>
+                <div class="form-item"><label for="glassSlotHeight">玻璃槽前口高度</label><div class="input-group"><input type="number" id="glassSlotHeight" value="100"><span class="unit-label">mm</span></div></div>
+                <div class="form-item"><label for="boxThickness">箱梁厚度</label><div class="input-group"><input type="number" id="boxThickness" value="40"><span class="unit-label">mm</span></div></div>
+                <div class="form-item"><label for="exitEmbedWidth">出口预埋板宽度</label><div class="input-group"><input type="number" id="exitEmbedWidth" value="500"><span class="unit-label">mm</span></div></div> 
+            </div>
+        </div>
+
+        <!-- 钢板厚度输入 -->
+        <div class="section">
+            <h3 style="margin-top: 0; color: var(--accent);">四、钢板厚度输入（mm）</h3>
+            
+            <div class="radio-group">
+                <label class="radio-option">
+                    <input type="radio" name="thicknessMode" value="default" onchange="switchMode('default', 'thicknessInputArea')" checked>
+                    <span>使用默认厚度（推荐）</span>
+                </label>
+                <label class="radio-option">
+                    <input type="radio" name="thicknessMode" value="custom" onchange="switchMode('custom', 'thicknessInputArea')">
+                    <span>自定义厚度</span>
+                </label>
+            </div>
+
+            <div id="thicknessInputArea" style="display: none;" class="thickness-section">
+                <!-- 快速设置选项 -->
+                <div class="quick-settings" style="margin-bottom: 20px;">
+                    <button type="button" class="btn quick-setting-btn" onclick="applyThicknessProfile('standard')">标准厚度</button>
+                    <button type="button" class="btn quick-setting-btn" onclick="applyThicknessProfile('economical')">经济型</button>
+                    <button type="button" class="btn quick-setting-btn" onclick="applyThicknessProfile('heavy-duty')">重型结构</button>
+                    <button type="button" class="btn reset-thickness" onclick="resetThicknessToDefault()">
+                        <span>↺</span>
+                        <span>重置为默认</span>
+                    </button>
+                </div>
+
+                <!-- 厚度输入区域将在这里动态生成 -->
+                <div id="thicknessInputsContainer"></div>
+            </div>
+        </div>
+
+        <div class="btn-section-nav">
+            <button class="btn btn-prev" onclick="backToStep1()">← 返回第一步</button>
+            <button class="btn btn-next" onclick="startCalculation()">🚀 开始计算所有梯段</button>
+        </div>
+    </div>
+
+    <!-- 第三步：计算结果 -->
+    <div id="step3" class="step-box">
+        <h2>📋 第三步：计算结果</h2>
+        <p style="color: var(--gray); margin-bottom: 25px;">以下是各梯段的详细计算结果，点击每个梯段查看完整V6.1计算结果</p>
+        
+        <div id="resultArea">
+            <div id="result">
+                <div style="text-align: center; padding: 40px; color: var(--gray);">
+                    <h3>等待计算...</h3>
+                    <p>请先配置梯段结构和参数，然后点击"开始计算"</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="btn-section-nav">
+            <button class="btn btn-prev" onclick="backToStep2()">← 返回参数配置</button>
+            <button class="btn" onclick="showSummaryReport()" style="background: linear-gradient(135deg, var(--secondary) 0%, #059669 100%); color: white;">
+                📋 查看第四步：汇总报告
+            </button>
+        </div>
+    </div>
+
+    <!-- 第四步：汇总报告 -->
+    <div id="step4" class="step-box">
+        <h2>📊 第四步：汇总报告</h2>
+        <p style="color: var(--gray); margin-bottom: 25px;">所有梯段合并后的部件用量汇总</p>
+        
+        <div id="summaryArea">
+            <div id="summaryResult">
+                <!-- 汇总内容将由JavaScript动态生成 -->
+            </div>
+        </div>
+
+        <div class="btn-section-nav">
+            <button class="btn btn-prev" onclick="backToStep3()">← 返回详细结果</button>
+            <button class="btn" onclick="exportSummaryToExcel()" style="background: linear-gradient(135deg, #38a169 0%, #2f855a 100%); color: white;">
+                📊 导出Excel汇总报告
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+// ==================== 全局变量和常量定义 ====================
+let middleCount = 0;
+let exitCount = 0;
+let allSectionsData = []; // 存储所有梯段数据
+let calculationResults = []; // 存储所有梯段计算结果
+let summaryResults = {}; // 汇总结果
+let globalCommonData = null; // 存储公共参数
+
+// 定义两种模型的输入模板
+const inputTemplates = {
+    circular_start: `
+        <div class="input-group">
+            <label>楼梯外直径 (mm)</label>
+            <input type="number" class="p-R" value="2600">
+        </div>
+        <div class="input-group">
+            <label>楼梯步长 (mm)</label>
+            <input type="number" class="p-step-length" value="900">
+        </div>
+        <div class="input-group">
+            <label>楼梯步宽 (中) (mm)</label>
+            <input type="number" class="p-w" value="253.7">
+        </div>
+        <div class="input-group">
+            <label>楼梯步高 (mm)</label>
+            <input type="number" class="p-h" value="190">
+        </div>
+        <div class="input-group">
+            <label>踏步数量 (步)</label>
+            <input type="number" class="p-steps" value="12">
+        </div>
+        <div class="input-group">
+            <label>平台数量</label>
+            <input type="number" class="p-platforms" value="1">
+        </div>
+        <div class="input-group">
+            <label>步宽比 (平台宽/踏步宽)</label>
+            <input type="number" class="p-width-ratio" value="3">
+        </div>
+        <div class="input-group">
+            <label>起步落地数</label>
+            <input type="number" class="p-start-landing" value="3">
+        </div>
+    `,
+    circular_middle_exit: `
+        <div class="input-group">
+            <label>楼梯外直径 (mm)</label>
+            <input type="number" class="p-R" value="2600">
+        </div>
+        <div class="input-group">
+            <label>楼梯步长 (mm)</label>
+            <input type="number" class="p-step-length" value="900">
+        </div>
+        <div class="input-group">
+            <label>楼梯步宽 (中) (mm)</label>
+            <input type="number" class="p-w" value="253.7">
+        </div>
+        <div class="input-group">
+            <label>楼梯步高 (mm)</label>
+            <input type="number" class="p-h" value="190">
+        </div>
+        <div class="input-group">
+            <label>踏步数量 (步)</label>
+            <input type="number" class="p-steps" value="12">
+        </div>
+        <div class="input-group">
+            <label>平台数量</label>
+            <input type="number" class="p-platforms" value="1">
+        </div>
+        <div class="input-group">
+            <label>步宽比 (平台宽/踏步宽)</label>
+            <input type="number" class="p-width-ratio" value="3">
+        </div>
+    `,
+    straight_start: `
+        <div class="input-group">
+            <label>楼梯步长 (mm)</label>
+            <input type="number" class="p-step-length" value="1200">
+        </div>
+        <div class="input-group">
+            <label>楼梯步宽 (mm)</label>
+            <input type="number" class="p-w" value="280">
+        </div>
+        <div class="input-group">
+            <label>楼梯步高 (mm)</label>
+            <input type="number" class="p-h" value="180">
+        </div>
+        <div class="input-group">
+            <label>踏步数量 (步)</label>
+            <input type="number" class="p-steps" value="15">
+        </div>
+        <div class="input-group">
+            <label>平台数量</label>
+            <input type="number" class="p-platforms" value="1">
+        </div>
+        <div class="input-group">
+            <label>步宽比 (平台宽/踏步宽)</label>
+            <input type="number" class="p-width-ratio" value="1.5">
+        </div>
+        <div class="input-group">
+            <label>起步落地数</label>
+            <input type="number" class="p-start-landing" value="3">
+        </div>
+    `,
+    straight_middle_exit: `
+        <div class="input-group">
+            <label>楼梯步长 (mm)</label>
+            <input type="number" class="p-step-length" value="1200">
+        </div>
+        <div class="input-group">
+            <label>楼梯步宽 (mm)</label>
+            <input type="number" class="p-w" value="280">
+        </div>
+        <div class="input-group">
+            <label>楼梯步高 (mm)</label>
+            <input type="number" class="p-h" value="180">
+        </div>
+        <div class="input-group">
+            <label>踏步数量 (步)</label>
+            <input type="number" class="p-steps" value="15">
+        </div>
+        <div class="input-group">
+            <label>平台数量</label>
+            <input type="number" class="p-platforms" value="1">
+        </div>
+        <div class="input-group">
+            <label>步宽比 (平台宽/踏步宽)</label>
+            <input type="number" class="p-width-ratio" value="1.5">
+        </div>
+    `
+};
+
+// 默认常量定义
+const DEFAULT_CONSTANTS = {
+    materialDensity: 7850, weldAllowance: 1.05, safeFactor: 1.20, hanging: 130, foldingEdge: 25, 
+    embedMargin: 60, finishThickness: 50, bottomKeel: 40, singlePlateHeight: 1050, 
+    glassSlotHeight: 100, boxThickness: 40, exitEmbedWidth: 500
+};
+
+// 默认厚度值
+const DEFAULT_THICKNESSES = {
+    // 预埋板部分
+    embedStart: 12, embedExit: 12, embedExitFlat: 12, 
+    // 起步部分
+    startTread: 5, startRiser: 8, startRib: 8, 
+    // 踏步部分
+    treadFold: 5, treadRib: 8, 
+    // 平台部分
+    platformFold: 5, platformRib: 8, 
+    // 封底部分
+    bottomPlate: 3, 
+    // 内侧梁部分
+    innerPlate: 10, innerBoxOuter: 10, innerBoxCover: 5, innerBoxRib: 8, 
+    // 外侧梁部分
+    outerPlate: 10, outerBoxOuter: 10, outerBoxCover: 5, outerBoxRib: 8
+};
+
+// 厚度预设配置
+const THICKNESS_PROFILES = {
+    'standard': DEFAULT_THICKNESSES, // 默认值
+    'economical': {
+        embedStart: 10, embedExit: 10, embedExitFlat: 10,
+        startTread: 4, startRiser: 6, startRib: 6,
+        treadFold: 4, treadRib: 6,
+        platformFold: 4, platformRib: 6,
+        bottomPlate: 2,
+        innerPlate: 8, innerBoxOuter: 8, innerBoxCover: 4, innerBoxRib: 6,
+        outerPlate: 8, outerBoxOuter: 8, outerBoxCover: 4, outerBoxRib: 6
+    },
+    'heavy-duty': {
+        embedStart: 16, embedExit: 16, embedExitFlat: 16,
+        startTread: 6, startRiser: 10, startRib: 10,
+        treadFold: 6, treadRib: 10,
+        platformFold: 6, platformRib: 10,
+        bottomPlate: 4,
+        innerPlate: 12, innerBoxOuter: 12, innerBoxCover: 6, innerBoxRib: 10,
+        outerPlate: 12, outerBoxOuter: 12, outerBoxCover: 6, outerBoxRib: 10
+    }
+};
+
+// ==================== 排序函数 ====================
+// 按梯段类型排序：起步段 → 中间段 → 出口段
+function sortSectionsByType(sections) {
+    // 先按类型排序：start(1) → middle(2) → exit(3)
+    // 如果都是中间段，再按添加顺序排序
+    return [...sections].sort((a, b) => {
+        const typeOrder = { 'start': 1, 'middle': 2, 'exit': 3 };
+        
+        // 首先按类型排序
+        if (typeOrder[a.sectionType] !== typeOrder[b.sectionType]) {
+            return typeOrder[a.sectionType] - typeOrder[b.sectionType];
+        }
+        
+        // 如果类型相同（都是middle），按原始索引排序
+        return a.index - b.index;
+    });
+}
+
+// 获取当前所有梯段的逻辑顺序
+function getCurrentLogicOrder() {
+    const cards = document.querySelectorAll('.struct-card');
+    const sections = Array.from(cards).map((card, index) => ({
+        element: card,
+        id: card.id,
+        sectionType: card.classList.contains('struct-start') ? 'start' : 
+                    card.classList.contains('struct-middle') ? 'middle' : 'exit',
+        title: card.querySelector('strong')?.innerText || `梯段 ${index + 1}`
+    }));
+    
+    return sortSectionsByType(sections);
+}
+
+// 更新配置界面的逻辑顺序显示
+function updateLogicOrderDisplay() {
+    const sortedSections = getCurrentLogicOrder();
+    
+    sortedSections.forEach((section, index) => {
+        const orderBadge = section.element.querySelector('.logic-order');
+        if (orderBadge) {
+            orderBadge.textContent = index + 1;
+        } else {
+            // 添加顺序标记
+            const badge = document.createElement('div');
+            badge.className = 'logic-order';
+            badge.textContent = index + 1;
+            section.element.appendChild(badge);
+        }
+    });
+}
+
+// ==================== 初始化函数 ====================
+document.addEventListener('DOMContentLoaded', function() {
+    // 初始化多梯段配置
+    initMultiSectionConfig();
+    
+    // 初始化厚度输入区域
+    initThicknessInputs();
+    
+    // 更新步骤指示器
+    updateStepIndicator(1);
+});
+
+// 初始化多梯段配置
+function initMultiSectionConfig() {
+    const structureList = document.getElementById('structure-list');
+    structureList.innerHTML = '';
+    
+    // 添加起步段
+    const startCardHtml = `
+        <div class="struct-card struct-start" id="card_start">
+            <div class="logic-order">1</div>
+            <div class="card-header">
+                <span><strong>📍 起步段</strong> (必须配置)</span>
+                <select class="model-select" onchange="updateCardUI('card_start', this.value)">
+                    <option value="circular" selected>正圆模型</option>
+                    <option value="straight">直梯模型</option>
+                </select>
+            </div>
+            <div class="param-inner-grid" id="body_card_start">
+                ${inputTemplates.circular_start}
+            </div>
+        </div>
+    `;
+    
+    structureList.innerHTML = startCardHtml;
+    
+    // 重置计数
+    middleCount = 0;
+    exitCount = 0;
+    allSectionsData = [];
+}
+
+// 初始化厚度输入区域
+function initThicknessInputs() {
+    const thicknessInputsContainer = document.getElementById('thicknessInputsContainer');
+    if (!thicknessInputsContainer) return;
+    
+    const thicknessGroups = [
+        {
+            title: "预埋板部分",
+            category: "embed-category",
+            inputs: [
+                { id: "embedStart", label: "起步预埋板", value: 12, min: 8, max: 20, step: 1, hint: "建议: 12-16mm" },
+                { id: "embedExit", label: "出口预埋板", value: 12, min: 8, max: 20, step: 1, hint: "建议: 12-16mm" },
+                { id: "embedExitFlat", label: "出口水平预埋板", value: 12, min: 8, max: 20, step: 1, hint: "建议: 12-16mm" }
+            ]
+        },
+        {
+            title: "起步部分",
+            category: "start-category",
+            inputs: [
+                { id: "startTread", label: "起步踏板", value: 5, min: 3, max: 8, step: 0.5, hint: "建议: 4-6mm" },
+                { id: "startRiser", label: "起步立板", value: 8, min: 6, max: 12, step: 1, hint: "建议: 6-10mm" },
+                { id: "startRib", label: "起步筋板", value: 8, min: 6, max: 12, step: 1, hint: "建议: 6-10mm" }
+            ]
+        },
+        {
+            title: "踏步部分",
+            category: "tread-category",
+            inputs: [
+                { id: "treadFold", label: "踏步折板", value: 5, min: 3, max: 8, step: 0.5, hint: "建议: 4-6mm" },
+                { id: "treadRib", label: "踏步筋板", value: 8, min: 6, max: 12, step: 1, hint: "建议: 6-10mm" }
+            ]
+        },
+        {
+            title: "平台部分",
+            category: "platform-category",
+            inputs: [
+                { id: "platformFold", label: "平台折板", value: 5, min: 3, max: 8, step: 0.5, hint: "建议: 4-6mm" },
+                { id: "platformRib", label: "平台筋板", value: 8, min: 6, max: 12, step: 1, hint: "建议: 6-10mm" }
+            ]
+        },
+        {
+            title: "封底部分",
+            category: "bottom-category",
+            inputs: [
+                { id: "bottomPlate", label: "底板", value: 3, min: 2, max: 6, step: 0.5, hint: "建议: 2-4mm" }
+            ]
+        },
+        {
+            title: "内侧梁部分",
+            category: "sidebeam-category",
+            inputs: [
+                { id: "innerPlate", label: "内侧板", value: 10, min: 8, max: 16, step: 1, hint: "建议: 8-12mm" },
+                { id: "innerBoxOuter", label: "内侧箱梁外", value: 10, min: 8, max: 16, step: 1, hint: "建议: 8-12mm" },
+                { id: "innerBoxCover", label: "内侧箱梁盖板", value: 5, min: 4, max: 8, step: 0.5, hint: "建议: 4-6mm" },
+                { id: "innerBoxRib", label: "内侧箱梁筋板", value: 8, min: 6, max: 12, step: 1, hint: "建议: 6-10mm" }
+            ]
+        },
+        {
+            title: "外侧梁部分",
+            category: "sidebeam-category",
+            inputs: [
+                { id: "outerPlate", label: "外侧板", value: 10, min: 8, max: 16, step: 1, hint: "建议: 8-12mm" },
+                { id: "outerBoxOuter", label: "外侧箱梁外", value: 10, min: 8, max: 16, step: 1, hint: "建议: 8-12mm" },
+                { id: "outerBoxCover", label: "外侧箱梁盖板", value: 5, min: 4, max: 8, step: 0.5, hint: "建议: 4-6mm" },
+                { id: "outerBoxRib", label: "外侧箱梁筋板", value: 8, min: 6, max: 12, step: 1, hint: "建议: 6-10mm" }
+            ]
+        }
+    ];
+    
+    let html = '';
+    thicknessGroups.forEach(group => {
+        html += `
+            <div class="thickness-category ${group.category}">
+                <h3>${group.title}</h3>
+                <div class="thickness-grid">
+                    ${group.inputs.map(input => `
+                        <div class="thickness-item">
+                            <label for="${input.id}">${input.label}</label>
+                            <div class="thickness-input-group">
+                                <input type="number" id="${input.id}" 
+                                       value="${input.value}" 
+                                       min="${input.min}" 
+                                       max="${input.max}" 
+                                       step="${input.step}">
+                                <span class="thickness-unit">mm</span>
+                            </div>
+                            <div class="thickness-hint">${input.hint}</div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    });
+    
+    thicknessInputsContainer.innerHTML = html;
+}
+
+// ==================== 多梯段配置功能 ====================
+// 更新步骤指示器
+function updateStepIndicator(step) {
+    for (let i = 1; i <= 4; i++) {
+        const indicator = document.getElementById('step-indicator-' + i);
+        if (indicator) {
+            indicator.classList.remove('active', 'completed');
+            if (i === step) {
+                indicator.classList.add('active');
+            } else if (i < step) {
+                indicator.classList.add('completed');
+            }
+        }
+    }
+    
+    // 显示对应步骤
+    document.querySelectorAll('.step-box').forEach(box => {
+        box.classList.remove('step-active');
+    });
+    document.getElementById('step' + step).classList.add('step-active');
+}
+
+// 切换卡片内部的输入项
+function updateCardUI(cardId, modelType) {
+    const body = document.getElementById('body_' + cardId);
+    const card = document.getElementById(cardId);
+    if (!body || !card) return;
+    
+    const isStart = card.classList.contains('struct-start');
+    const isMiddle = card.classList.contains('struct-middle');
+    const isExit = card.classList.contains('struct-exit');
+    
+    if (modelType === 'circular') {
+        if (isStart) {
+            body.innerHTML = inputTemplates.circular_start;
+        } else {
+            body.innerHTML = inputTemplates.circular_middle_exit;
+        }
+    } else {
+        if (isStart) {
+            body.innerHTML = inputTemplates.straight_start;
+        } else {
+            body.innerHTML = inputTemplates.straight_middle_exit;
+        }
+    }
+}
+
+// 添加新段落 - 增加智能提示
+function addNewSection(type) {
+    let countLimit = type === 'middle' ? 5 : 2;
+    let currentCount = type === 'middle' ? middleCount : exitCount;
+    
+    if (currentCount >= countLimit) {
+        alert(`最多添加 ${countLimit} 段${type === 'middle' ? '中间段' : '出口段'}`);
+        return;
+    }
+
+    // 检查当前配置情况，给予智能提示
+    const currentSections = document.querySelectorAll('.struct-card');
+    const hasStart = Array.from(currentSections).some(card => 
+        card.classList.contains('struct-start')
+    );
+    
+    // 特殊检查：添加出口段时的提示
+    if (type === 'exit') {
+        // 检查是否已经有出口段
+        const hasExit = Array.from(currentSections).some(card => 
+            card.classList.contains('struct-exit')
+        );
+        
+        if (hasExit) {
+            alert('只能添加一个出口段！');
+            return;
+        }
+        
+        // 提示逻辑顺序
+        if (!hasStart) {
+            const confirmAdd = confirm('提示：通常楼梯结构从起步段开始。\n\n建议配置顺序：起步段 → 中间段 → 出口段\n\n是否继续添加出口段？');
+            if (!confirmAdd) return;
+        }
+        
+        // 如果有多个中间段，确认出口段位置
+        if (middleCount > 0) {
+            const confirmAdd = confirm('提示：您已经配置了中间段。\n\n出口段通常位于所有中间段之后。\n\n系统会自动按逻辑顺序排序显示。\n\n是否继续添加出口段？');
+            if (!confirmAdd) return;
+        }
+    }
+    
+    // 增加计数
+    if (type === 'middle') middleCount++; else exitCount++;
+    
+    const id = 'card_' + Math.random().toString(36).substr(2, 9);
+    const container = document.getElementById('structure-list');
+    const title = type === 'middle' ? `中间段 ${middleCount}` : `出口段 ${exitCount}`;
+    const cssClass = type === 'middle' ? 'struct-middle' : 'struct-exit';
+
+    const html = `
+        <div class="struct-card ${cssClass}" id="${id}">
+            <div class="logic-order"></div>
+            <div class="card-header">
+                <span><strong>📍 ${title}</strong></span>
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <select class="model-select" onchange="updateCardUI('${id}', this.value)">
+                        <option value="circular" selected>正圆模型</option>
+                        <option value="straight">直梯模型</option>
+                    </select>
+                    <button onclick="removeSection('${id}', '${type}')" style="color:#ef4444; border:none; background:none; cursor:pointer; font-weight:bold; font-size: 16px;">✕</button>
+                </div>
+            </div>
+            <div class="param-inner-grid" id="body_${id}">
+                ${inputTemplates.circular_middle_exit}
+            </div>
+        </div>
+    `;
+    container.insertAdjacentHTML('beforeend', html);
+    
+    // 更新逻辑顺序显示
+    updateLogicOrderDisplay();
+}
+
+// 删除梯段
+function removeSection(id, type) {
+    const element = document.getElementById(id);
+    if (element) {
+        if (confirm('确定要删除这个梯段吗？')) {
+            element.remove();
+            if (type === 'middle') middleCount--; else exitCount--;
+            
+            // 更新逻辑顺序显示
+            updateLogicOrderDisplay();
+        }
+    }
+}
+
+// ==================== 步骤导航功能 ====================
+// 跳转到第二步
+function goToStep2() {
+    // 收集第一步数据
+    if (!collectStep1Data()) {
+        alert("请至少配置起步段");
+        return;
+    }
+    
+    // 显示逻辑顺序确认
+    const sortedSections = sortSectionsByType(allSectionsData);
+    let orderMessage = "📋 当前梯段配置（按逻辑顺序排列）：\n\n";
+    
+    sortedSections.forEach((section, index) => {
+        const typeName = section.sectionType === 'start' ? '起步段' : 
+                        section.sectionType === 'middle' ? '中间段' : '出口段';
+        orderMessage += `${index + 1}. ${typeName} - ${section.title}\n`;
+    });
+    
+    orderMessage += "\n系统将按此顺序进行计算和显示。";
+    
+    alert(orderMessage);
+    
+    updateStepIndicator(2);
+}
+
+// 收集第一步数据 - 修正：中间段和出口段不收集起步落地数
+function collectStep1Data() {
+    allSectionsData = [];
+    const stages = document.querySelectorAll('.struct-card');
+    
+    if (stages.length === 0) {
+        return false;
+    }
+    
+    stages.forEach((card, index) => {
+        const title = card.querySelector('strong')?.innerText || `梯段 ${index + 1}`;
+        const modelSelect = card.querySelector('.model-select');
+        const modelType = modelSelect?.value || 'circular';
+        const modelName = modelType === 'straight' ? '直梯模型' : '正圆模型';
+        
+        // 判断梯段类型
+        let sectionType = 'start'; // 默认值
+        if (card.classList.contains('struct-start')) {
+            sectionType = 'start';
+        } else if (card.classList.contains('struct-middle')) {
+            sectionType = 'middle';
+        } else if (card.classList.contains('struct-exit')) {
+            sectionType = 'exit';
+        }
+        
+        // 收集参数值 - 修正：中间段和出口段不收集起步落地数
+        const params = {};
+        const inputs = card.querySelectorAll('input');
+        inputs.forEach(input => {
+            // 对于非起步段，跳过起步落地数
+            if (sectionType !== 'start' && input.classList.contains('p-start-landing')) {
+                return; // 跳过这个输入
+            }
+            
+            // 获取参数类别
+            if (input.classList.contains('p-R')) params['p-R'] = parseFloat(input.value) || 0;
+            else if (input.classList.contains('p-step-length')) params['p-step-length'] = parseFloat(input.value) || 0;
+            else if (input.classList.contains('p-w')) params['p-w'] = parseFloat(input.value) || 0;
+            else if (input.classList.contains('p-h')) params['p-h'] = parseFloat(input.value) || 0;
+            else if (input.classList.contains('p-steps')) params['p-steps'] = parseInt(input.value) || 0;
+            else if (input.classList.contains('p-platforms')) params['p-platforms'] = parseInt(input.value) || 0;
+            else if (input.classList.contains('p-width-ratio')) params['p-width-ratio'] = parseFloat(input.value) || 0;
+            else if (input.classList.contains('p-start-landing')) params['p-start-landing'] = parseInt(input.value) || 0;
+        });
+        
+        // 对于非起步段，确保起步落地数为0
+        if (sectionType !== 'start') {
+            params['p-start-landing'] = 0;
+        }
+        
+        allSectionsData.push({
+            id: card.id,
+            index: index,
+            title: title,
+            modelType: modelType,
+            modelName: modelName,
+            sectionType: sectionType, // 正确传递梯段类型
+            params: params
+        });
+    });
+    
+    console.log("收集到的梯段数据:", allSectionsData);
+    return true;
+}
+
+// 返回第一步
+function backToStep1() {
+    updateStepIndicator(1);
+}
+
+// 返回第二步
+function backToStep2() {
+    updateStepIndicator(2);
+}
+
+// 返回第三步
+function backToStep3() {
+    updateStepIndicator(3);
+}
+
+// ==================== 参数配置功能 ====================
+// 控制函数：切换显示/隐藏输入区域
+function switchMode(mode, areaId) {
+    const area = document.getElementById(areaId);
+    if (areaId === 'thicknessInputArea') {
+        area.style.display = (mode === 'custom') ? 'block' : 'none';
+    } else if (areaId === 'constantsInputArea') {
+        area.style.display = (mode === 'custom') ? 'flex' : 'none';
+    }
+}
+
+// 应用厚度预设
+function applyThicknessProfile(profile) {
+    const thicknesses = THICKNESS_PROFILES[profile];
+    if (!thicknesses) return;
+    
+    for (const [key, value] of Object.entries(thicknesses)) {
+        const input = document.getElementById(key);
+        if (input) {
+            input.value = value;
+        }
+    }
+    
+    // 更新快速设置按钮状态
+    document.querySelectorAll('.quick-setting-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    event.target.classList.add('active');
+}
+
+// 重置为默认厚度
+function resetThicknessToDefault() {
+    applyThicknessProfile('standard');
+    
+    // 更新按钮状态
+    document.querySelectorAll('.quick-setting-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+}
+
+// ==================== V6.1完整计算函数 - 已修正预埋板数量和起步部件逻辑 ====================
+// 辅助函数：计算单位定额面积和重量 - 从V6.1复制
+function calculateUnitMetrics(length, width, thickness, density) {
+    // 转化为米
+    const L_m = length / 1000;
+    const W_m = width / 1000;
+    const T_m = thickness / 1000;
+    
+    // 面积 (m²) = 长 * 宽
+    const area = L_m * W_m; 
+    
+    // 重量 (kg) = 面积 * 厚度 (m) * 密度 (kg/m³)
+    const weight = area * T_m * density;
+
+    return { area: area, weight: weight };
+}
+
+// V6.1主计算函数 - 修正了预埋板数量逻辑和起步部件逻辑
+function calculateV6(data, commonData) {
+    const PI = Math.PI;
+    
+    // 解构参数 - 完全按照V6.1的格式
+    const {
+        shape,
+        outerDiameter = 0,
+        stepLength, stepWidth, stepHeight, stepCount, platformCount,
+        widthRatio, landingSteps
+    } = data;
+    
+    const {
+        constants,
+        outerHandrail, innerHandrail, exitLevel,
+        thicknesses,
+        sectionType = 'start', // 梯段类型
+        isLastMiddleWithoutExit = false, // 是否是最后一个中间段且没有出口段
+        isOnlySection = false // 是否是唯一梯段
+    } = commonData;
+    
+    // 判断是否为起步段
+    const isStartSection = (sectionType === 'start');
+    
+    // 修正：只有起步段才使用 landingSteps，其他段为 0
+    const effectiveLandingSteps = isStartSection ? landingSteps : 0;
+    
+    // 筋板数量 - 完全按照V6.1公式
+    const ribCount = (stepLength > 0) ? Math.ceil(stepLength / 350 - 1) : 0; 
+    
+    // 根据形状进行不同的计算 - 完全按照V6.1逻辑
+    let innerDiameter, middleDiameter, stepAngle, innerStepWidth, outerStepWidth;
+    
+    if (shape === 'circular') {
+        // 正圆螺旋梯计算 - 完全按照V6.1
+        // 直径（内）
+        innerDiameter = outerDiameter - (stepLength * 2);
+        // 直径（中）
+        middleDiameter = stepLength + innerDiameter; 
+        
+        // 踏步螺旋角度 
+        stepAngle = 0;
+        if (middleDiameter > 0) {
+            let ratio = stepWidth / middleDiameter;
+            const safeRatio = Math.min(Math.max(ratio, -1), 1); 
+            const stepAngle_val = Math.asin(safeRatio) * (180 / PI) * 2;
+            stepAngle = Math.round(stepAngle_val * 1000) / 1000;
+        }
+
+        const innerFactor = stepAngle / 360; 
+        
+        // 步宽（内）
+        innerStepWidth = innerFactor * innerDiameter * PI;
+        // 步宽（外）
+        outerStepWidth = innerFactor * outerDiameter * PI;
+        
+    } else if (shape === 'straight') {
+        // 直跑梯计算逻辑 - 完全按照V6.1
+        innerDiameter = 0;
+        middleDiameter = 0;
+        stepAngle = 0;
+        innerStepWidth = stepWidth; // 直跑梯步宽固定
+        outerStepWidth = stepWidth; // 直跑梯步宽固定
+    }
+    
+    // 楼梯螺旋角度
+    const totalEquivalentSteps = stepCount + (platformCount * widthRatio) - platformCount;
+    const stairAngle = stepAngle * totalEquivalentSteps;
+    // 层高
+    const floorHeight = stepCount * stepHeight;
+    
+    // 坡度计算部分 - 完全按照V6.1
+    const platformHeightEquiv = (widthRatio > 0) ? stepHeight / widthRatio : 0; // 平台等效步高
+    
+    // 坡度计算
+    const slope1_numerator = Math.sqrt((innerStepWidth * innerStepWidth) + (stepHeight * stepHeight));
+    const slope1_InnerTreadInnerSlope = (innerStepWidth > 0) ? slope1_numerator / innerStepWidth : 0; 
+
+    const slope2_numerator = (outerStepWidth * outerStepWidth) + (stepHeight * stepHeight);
+    const slope2_OuterTreadInnerSlope = (outerStepWidth > 0) ? Math.sqrt(slope2_numerator) / outerStepWidth : 0; 
+
+    const slope3_numerator = (innerStepWidth * innerStepWidth) + (platformHeightEquiv * platformHeightEquiv);
+    const slope3_InnerPlatformInnerSlope = (innerStepWidth > 0) ? Math.sqrt(slope3_numerator) / innerStepWidth : 0; 
+
+    const slope4_numerator = (outerStepWidth * outerStepWidth) + (platformHeightEquiv * platformHeightEquiv);
+    const slope4_OuterPlatformInnerSlope = (outerStepWidth > 0) ? Math.sqrt(slope4_numerator) / outerStepWidth : 0; 
+
+    // 踏步斜率计算
+    const stepSlope = stepHeight / Math.sqrt(stepWidth * stepWidth + stepHeight * stepHeight);
+    const inclineAngle = Math.asin(stepSlope) * (180 / PI);
+
+    // 用料计算部分：常量和基础变量 - 完全按照V6.1
+    const materialDensity = constants.materialDensity;
+    const embedMargin = constants.embedMargin;
+    
+    // 修正：使用 effectiveLandingSteps 而不是 landingSteps
+    const totalTreadCount = stepCount - effectiveLandingSteps - platformCount;
+    const platformCountEquiv = platformCount * widthRatio; // 平台等效数量 (用于平台板计算)
+    
+    // ========== 修正预埋板数量计算部分 ==========
+    // E1: 起步预埋板 - 只有起步段才需要，数量为1
+    const E1_Length = stepLength + 2 * embedMargin; 
+    const E1_Width_Term1 = (shape === 'straight') ? effectiveLandingSteps * stepWidth : (stepAngle / 360) * effectiveLandingSteps * middleDiameter * PI;
+    const E1_Width = E1_Width_Term1 + (embedMargin * 2) + 100;
+    const E1_Thickness = thicknesses.embedStart; 
+    
+    // 修正：只有sectionType为'start'时才为1，其他都为0
+    const E1_Count = (sectionType === 'start') ? 1 : 0;
+
+    // E2: 出口预埋板 - 根据梯段类型和配置决定
+    const E2_Length = stepLength + 2 * embedMargin;
+    let E2_Width_Add = (exitLevel === 'no') ? stepHeight : 0; 
+    const E2_Width = constants.exitEmbedWidth + E2_Width_Add; 
+    const E2_Thickness = thicknesses.embedExit;
+    
+    let E2_Count = 0;
+    if (sectionType === 'exit') {
+        E2_Count = 1; // 出口段始终为1
+    } else if (sectionType === 'middle' && isLastMiddleWithoutExit) {
+        E2_Count = 1; // 最后一个中间段且没有出口段时为1
+    } else if (sectionType === 'start' && isOnlySection) {
+        E2_Count = 1; // 起步段且是唯一梯段时为1
+    }
+    
+    // E3: 出口水平预埋板 - 数量与出口预埋板一致
+    const E3_Length = stepLength + 2 * embedMargin;
+    const E3_Width = 240.00; 
+    const E3_Thickness = thicknesses.embedExitFlat;
+    const E3_Count = E2_Count; // 跟随出口预埋板数量
+    
+    const E1_UnitMetrics = calculateUnitMetrics(E1_Length, E1_Width, E1_Thickness, materialDensity);
+    const E1_TotalArea = E1_UnitMetrics.area * E1_Count;
+    const E1_TotalWeight = E1_UnitMetrics.weight * E1_Count;
+
+    const E2_UnitMetrics = calculateUnitMetrics(E2_Length, E2_Width, E2_Thickness, materialDensity);
+    const E2_TotalArea = E2_UnitMetrics.area * E2_Count;
+    const E2_TotalWeight = E2_UnitMetrics.weight * E2_Count;
+
+    const E3_UnitMetrics = calculateUnitMetrics(E3_Length, E3_Width, E3_Thickness, materialDensity);
+    const E3_TotalArea = E3_UnitMetrics.area * E3_Count;
+    const E3_TotalWeight = E3_UnitMetrics.weight * E3_Count;
+    
+    // 用料计算部分：起步 (ST/SR/SRib) - 只在起步段计算
+    const START_RISER_WIDTH = 477.5; 
+    const START_RIB_WIDTH = 430.0;   
+
+    // ST: 起步踏板 - 只在起步段有
+    const ST_Length = stepLength;       
+    const ST_Width = stepWidth;         
+    const ST_Thickness = thicknesses.startTread;    
+    const ST_Count = effectiveLandingSteps; // 修正：只在起步段有数量
+    const ST_UnitMetrics = calculateUnitMetrics(ST_Length, ST_Width, ST_Thickness, materialDensity);
+    const ST_TotalArea = ST_UnitMetrics.area * ST_Count;
+    const ST_TotalWeight = ST_UnitMetrics.weight * ST_Count;
+
+    // SR: 起步立板 - 只在起步段有
+    const SR_Length = stepLength;       
+    const SR_Width = START_RISER_WIDTH;      
+    const SR_Thickness = thicknesses.startRiser;    
+    const SR_Count = effectiveLandingSteps + (isStartSection ? 1 : 0); // +1 只在起步段
+    const SR_UnitMetrics = calculateUnitMetrics(SR_Length, SR_Width, SR_Thickness, materialDensity);
+    const SR_TotalArea = SR_UnitMetrics.area * SR_Count;
+    const SR_TotalWeight = SR_UnitMetrics.weight * SR_Count;
+
+    // SRib: 起步筋板 - 只在起步段有
+    const SRib_Length = stepWidth;      
+    const SRib_Width = START_RIB_WIDTH;      
+    const SRib_Thickness = thicknesses.startRib;    
+    const SRib_Count = ribCount * effectiveLandingSteps; // 修正：只在起步段计算
+    const SRib_UnitMetrics = calculateUnitMetrics(SRib_Length, SRib_Width, SRib_Thickness, materialDensity);
+    const SRib_TotalArea = SRib_UnitMetrics.area * SRib_Count;
+    const SRib_TotalWeight = SRib_UnitMetrics.weight * SRib_Count;
+    
+    // 用料计算部分：踏步 (TF/TR) - 完全按照V6.1
+    // TF: 踏板折板 (Tread Fold)
+    const TF_Thickness = thicknesses.treadFold;
+    const TF_Width = stepWidth + stepHeight + (constants.hanging * 2) + constants.foldingEdge - (TF_Thickness * 2) - 2;
+    const TF_Length = stepLength;
+    const TF_Count = totalTreadCount; 
+
+    const TF_UnitMetrics = calculateUnitMetrics(TF_Length, TF_Width, TF_Thickness, materialDensity);
+    const TF_TotalArea = TF_UnitMetrics.area * TF_Count;
+    const TF_TotalWeight = TF_UnitMetrics.weight * TF_Count;
+    
+    // TR: 踏板筋板 (Tread Rib)
+    const TR_Thickness = thicknesses.treadRib;
+    const TR_FoldThickness = thicknesses.treadFold; 
+    const TR_Length = stepWidth - (TR_FoldThickness * 2);
+    const TR_Width = ((stepHeight + (constants.hanging * 2)) / 2) + constants.foldingEdge - (TR_FoldThickness * 2);
+    const TR_Count = totalTreadCount * ribCount; 
+
+    const TR_UnitMetrics = calculateUnitMetrics(TR_Length, TR_Width, TR_Thickness, materialDensity);
+    const TR_TotalArea = TR_UnitMetrics.area * TR_Count;
+    const TR_TotalWeight = TR_UnitMetrics.weight * TR_Count;
+
+    // 用料计算部分：平台 (PF/PRib) - 完全按照V6.1
+    // PF: 平台折板 (Platform Fold)
+    const PF_Thickness = thicknesses.platformFold;
+    const PF_Length = stepLength;
+    const PF_Width = stepWidth + stepHeight + (constants.hanging * 2) + constants.foldingEdge - (PF_Thickness * 2) - 2;
+    const PF_Count = platformCountEquiv; 
+
+    const PF_UnitMetrics = calculateUnitMetrics(PF_Length, PF_Width, PF_Thickness, materialDensity);
+    const PF_TotalArea = PF_UnitMetrics.area * PF_Count;
+    const PF_TotalWeight = PF_UnitMetrics.weight * PF_Count;
+    
+    // PRib: 平台筋板 (Platform Rib)
+    const PRib_Thickness = thicknesses.platformRib;
+    const PRib_FoldThickness = thicknesses.platformFold; 
+    const PRib_Length = stepWidth - (PRib_FoldThickness * 2);
+    const PRib_Width = ((stepHeight + (constants.hanging * 2)) / 2) + constants.foldingEdge - (PRib_FoldThickness * 2);
+    const PRib_Count = platformCountEquiv * ribCount; 
+
+    const PRib_UnitMetrics = calculateUnitMetrics(PRib_Length, PRib_Width, PRib_Thickness, materialDensity);
+    const PRib_TotalArea = PRib_UnitMetrics.area * PRib_Count;
+    const PRib_TotalWeight = PRib_UnitMetrics.weight * PRib_Count;
+
+    // 侧梁计算（根据形状调整）- 完全按照V6.1
+    let IP_Length, IP_Width, OP_Length, OP_Width;
+    
+    if (shape === 'straight') {
+        // 直跑梯侧梁计算
+        IP_Length = totalEquivalentSteps * stepWidth;
+        OP_Length = totalEquivalentSteps * stepWidth;
+    } else {
+        // 螺旋梯侧梁计算
+        IP_Length = totalEquivalentSteps * innerStepWidth;
+        OP_Length = totalEquivalentSteps * outerStepWidth;
+    }
+
+    // 用料计算部分：侧梁 - 内侧板 (IP) - 完全按照V6.1
+    const IP_Thickness = thicknesses.innerPlate;
+    const IP_Count = 1;
+
+    // 宽=IF(内侧="单钢板",单钢板前口高度,玻璃槽前口高度)+步高+下挂+(封底龙骨+折边)*MAX(踏步内内侧坡度,平台内内侧坡度)+50
+    let IP_BaseHeight = 0;
+    if (innerHandrail === 'singlePlate') {
+        IP_BaseHeight = constants.singlePlateHeight;
+    } else if (innerHandrail === 'glassSlot') {
+        IP_BaseHeight = constants.glassSlotHeight;
+    } else { // 'boxBeam' - 假设按单钢板高度计算
+        IP_BaseHeight = constants.singlePlateHeight; 
+    }
+    
+    const maxInnerSlope = Math.max(slope1_InnerTreadInnerSlope, slope3_InnerPlatformInnerSlope);
+
+    IP_Width = IP_BaseHeight + 
+                     stepHeight + 
+                     constants.hanging + 
+                     (constants.bottomKeel + constants.foldingEdge) * maxInnerSlope + 
+                     50;
+
+    const IP_UnitMetrics = calculateUnitMetrics(IP_Length, IP_Width, IP_Thickness, materialDensity);
+    const IP_TotalArea = IP_UnitMetrics.area * IP_Count;
+    const IP_TotalWeight = IP_UnitMetrics.weight * IP_Count;
+
+    // 侧梁 - 外侧板 (OP) - 完全按照V6.1
+    const OP_Thickness = thicknesses.outerPlate;
+    const OP_Count = 1;
+
+    // 宽=IF(外侧扶手="单钢板",单钢板前口高,玻璃槽前口高)+步高+下挂+(封底龙骨+折边)*MAX(踏步外内侧坡,平台外内侧坡)
+    let OP_BaseHeight = 0;
+    if (outerHandrail === 'singlePlate') {
+        OP_BaseHeight = constants.singlePlateHeight;
+    } else if (outerHandrail === 'glassSlot') {
+        OP_BaseHeight = constants.glassSlotHeight;
+    } else { // 'boxBeam' - 假设按单钢板高度计算
+        OP_BaseHeight = constants.singlePlateHeight; 
+    }
+    
+    const maxOuterSlope = Math.max(slope2_OuterTreadInnerSlope, slope4_OuterPlatformInnerSlope);
+
+    OP_Width = OP_BaseHeight + 
+                     stepHeight + 
+                     constants.hanging + 
+                     (constants.bottomKeel + constants.foldingEdge) * maxOuterSlope;
+
+    const OP_UnitMetrics = calculateUnitMetrics(OP_Length, OP_Width, OP_Thickness, materialDensity);
+    const OP_TotalArea = OP_UnitMetrics.area * OP_Count;
+    const OP_TotalWeight = OP_UnitMetrics.weight * OP_Count;
+
+    // 侧梁 - 内侧箱梁外 (IBO) - 完全按照V6.1
+    const IBO_Thickness = thicknesses.innerBoxOuter;
+
+    // 长=内侧板长度-PI()*箱梁厚度*(楼梯螺旋角/360)
+    const IBO_Length = (shape === 'straight') ? IP_Length : IP_Length - (PI * constants.boxThickness * (stairAngle / 360));
+
+    // 宽=IF(内侧="单钢板",单钢板前口高度,玻璃槽前口高度)+步高+下挂+(封底龙骨+折边)*MAX(踏步内内侧坡度,平台内内侧坡度)+50
+    const IBO_Width = IP_Width; // 与内侧板宽度相同
+
+    // 数量=IF(内侧扶手="单钢板",0,1)
+    const IBO_Count = (innerHandrail === 'singlePlate') ? 0 : 1;
+
+    const IBO_UnitMetrics = calculateUnitMetrics(IBO_Length, IBO_Width, IBO_Thickness, materialDensity);
+    const IBO_TotalArea = IBO_UnitMetrics.area * IBO_Count;
+    const IBO_TotalWeight = IBO_UnitMetrics.weight * IBO_Count;
+
+    // 侧梁 - 内侧箱梁筋板 (IBR) - 完全按照V6.1
+    const IBR_Thickness = thicknesses.innerBoxRib;
+
+    // 长=内侧板宽度-150
+    const IBR_Length = IP_Width - 150;
+
+    // 宽=箱梁厚度-内侧板厚度-内侧箱梁外厚度+10
+    const IBR_Width = constants.boxThickness - thicknesses.innerPlate - thicknesses.innerBoxOuter + 10;
+
+    // 数量=IF(内侧扶手="单钢板",0,步数+(步宽比-1)*平台数量+2)
+    const IBR_Count = (innerHandrail === 'singlePlate') ? 0 : 
+                     stepCount + (widthRatio - 1) * platformCount + 2;
+
+    const IBR_UnitMetrics = calculateUnitMetrics(IBR_Length, IBR_Width, IBR_Thickness, materialDensity);
+    const IBR_TotalArea = IBR_UnitMetrics.area * IBR_Count;
+    const IBR_TotalWeight = IBR_UnitMetrics.weight * IBR_Count;
+
+    // 侧梁 - 外侧箱梁外 (OBO) - 完全按照V6.1
+    const OBO_Thickness = thicknesses.outerBoxOuter;
+
+    // 长=外侧板长度+PI()*箱梁厚度*(楼梯螺旋角/360)
+    const OBO_Length = (shape === 'straight') ? OP_Length : OP_Length + (PI * constants.boxThickness * (stairAngle / 360));
+
+    // 宽=IF(外侧扶手="单钢板",单钢板前口高,玻璃槽前口高)+步高+下挂+(封底龙骨+折边)*MAX(踏步外内侧坡,平台外内侧坡)
+    const OBO_Width = OP_Width; // 与外侧板宽度相同
+
+    // 数量=IF(外侧扶手="单钢板",0,1)
+    const OBO_Count = (outerHandrail === 'singlePlate') ? 0 : 1;
+
+    const OBO_UnitMetrics = calculateUnitMetrics(OBO_Length, OBO_Width, OBO_Thickness, materialDensity);
+    const OBO_TotalArea = OBO_UnitMetrics.area * OBO_Count;
+    const OBO_TotalWeight = OBO_UnitMetrics.weight * OBO_Count;
+
+    // 侧梁 - 外侧箱梁盖板 (OBC) - 完全按照V6.1
+    const OBC_Thickness = thicknesses.outerBoxCover;
+
+    // 长=((步数-平台数量)*步宽（外）*踏步外内侧坡+平台数量*步宽比*步宽（外）*平台外内侧坡)
+    const OBC_Length_Term1 = (stepCount - platformCount) * outerStepWidth * slope2_OuterTreadInnerSlope;
+    const OBC_Length_Term2 = platformCount * widthRatio * outerStepWidth * slope4_OuterPlatformInnerSlope;
+    const OBC_Length = OBC_Length_Term1 + OBC_Length_Term2;
+
+    // 宽=箱梁厚度-外侧板厚度-外侧箱梁外
+    const OBC_Width = constants.boxThickness - thicknesses.outerPlate - thicknesses.outerBoxOuter;
+
+    // 数量=IF(外侧扶手="单钢板",0,2)
+    const OBC_Count = (outerHandrail === 'singlePlate') ? 0 : 2;
+
+    const OBC_UnitMetrics = calculateUnitMetrics(OBC_Length, OBC_Width, OBC_Thickness, materialDensity);
+    const OBC_TotalArea = OBC_UnitMetrics.area * OBC_Count;
+    const OBC_TotalWeight = OBC_UnitMetrics.weight * OBC_Count;
+
+    // 侧梁 - 外侧箱梁筋板 (OBR) - 完全按照V6.1
+    const OBR_Thickness = thicknesses.outerBoxRib;
+
+    // 长=外侧板宽度-150
+    const OBR_Length = OP_Width - 150;
+
+    // 宽=封底龙骨-外侧板厚度-外侧箱梁外厚度+10
+    const OBR_Width = constants.bottomKeel - thicknesses.outerPlate - thicknesses.outerBoxOuter + 10;
+
+    // 数量=IF(外侧扶手="单钢板",0,步数+(步宽比-1)*平台数量+2)
+    const OBR_Count = (outerHandrail === 'singlePlate') ? 0 : 
+                     stepCount + (widthRatio - 1) * platformCount + 2;
+
+    const OBR_UnitMetrics = calculateUnitMetrics(OBR_Length, OBR_Width, OBR_Thickness, materialDensity);
+    const OBR_TotalArea = OBR_UnitMetrics.area * OBR_Count;
+    const OBR_TotalWeight = OBR_UnitMetrics.weight * OBR_Count;
+
+    // 侧梁 - 内侧箱梁盖板 (IBC) - 完全按照V6.1
+    const IBC_Thickness = thicknesses.innerBoxCover;
+
+    // (步数-平台数量) - 计算需要走踏步部分的长度
+    const treadStepsOnlyForLength = stepCount - platformCount; 
+
+    // 长 = ((步数-平台数量)*步宽（内）*踏步内内侧坡 + 平台数量*步宽比*步宽（内）*平台内内侧坡)
+    const IBC_Length_Term1 = treadStepsOnlyForLength * innerStepWidth * slope1_InnerTreadInnerSlope;
+    const IBC_Length_Term2 = platformCount * widthRatio * innerStepWidth * slope3_InnerPlatformInnerSlope;
+    const IBC_Length = IBC_Length_Term1 + IBC_Length_Term2;
+
+    // 宽 = 箱梁厚度-外侧板厚度-外侧箱梁外厚度 (严格遵照用户公式)
+    const IBC_Width = constants.boxThickness - thicknesses.outerPlate - thicknesses.outerBoxOuter;
+
+    // 数量 = IF(内侧="单钢板",0,2). 
+    const IBC_Count = (innerHandrail === 'singlePlate') ? 0 : 2; 
+
+    const IBC_UnitMetrics = calculateUnitMetrics(IBC_Length, IBC_Width, IBC_Thickness, materialDensity);
+    const IBC_TotalArea = IBC_UnitMetrics.area * IBC_Count;
+    const IBC_TotalWeight = IBC_UnitMetrics.weight * IBC_Count;
+    
+    // 新增：底板计算 - 修改后的公式 - 完全按照V6.1
+    const BP_Thickness = thicknesses.bottomPlate;
+    
+    // 修改后的底板长度公式
+    const BP_Length = (IBC_Length - innerStepWidth * effectiveLandingSteps + OBC_Length - outerStepWidth * effectiveLandingSteps) / 2 + effectiveLandingSteps * stepHeight - constants.hanging - constants.bottomKeel;
+    
+    // 宽=步长
+    const BP_Width = stepLength;
+    
+    // 数量=1
+    const BP_Count = 1;
+    
+    const BP_UnitMetrics = calculateUnitMetrics(BP_Length, BP_Width, BP_Thickness, materialDensity);
+    const BP_TotalArea = BP_UnitMetrics.area * BP_Count;
+    const BP_TotalWeight = BP_UnitMetrics.weight * BP_Count;
+    
+    // 准备用量表格数据结构 - 完全按照V6.1，所有侧板都包含
+    const materialData = [
+        // 预埋板
+        { classification: "预埋板", name: "起步预埋板", L: E1_Length, W: E1_Width, T: E1_Thickness, unitArea: E1_UnitMetrics.area, unitWeight: E1_UnitMetrics.weight, count: E1_Count, totalArea: E1_TotalArea, totalWeight: E1_TotalWeight },
+        { classification: "预埋板", name: "出口预埋板", L: E2_Length, W: E2_Width, T: E2_Thickness, unitArea: E2_UnitMetrics.area, unitWeight: E2_UnitMetrics.weight, count: E2_Count, totalArea: E2_TotalArea, totalWeight: E2_TotalWeight },
+        { classification: "预埋板", name: "出口水平预埋板", L: E3_Length, W: E3_Width, T: E3_Thickness, unitArea: E3_UnitMetrics.area, unitWeight: E3_UnitMetrics.weight, count: E3_Count, totalArea: E3_TotalArea, totalWeight: E3_TotalWeight },
+        // 起步
+        { classification: "起步", name: "起步踏板", L: ST_Length, W: ST_Width, T: ST_Thickness, unitArea: ST_UnitMetrics.area, unitWeight: ST_UnitMetrics.weight, count: ST_Count, totalArea: ST_TotalArea, totalWeight: ST_TotalWeight },
+        { classification: "起步", name: "起步立板", L: SR_Length, W: SR_Width, T: SR_Thickness, unitArea: SR_UnitMetrics.area, unitWeight: SR_UnitMetrics.weight, count: SR_Count, totalArea: SR_TotalArea, totalWeight: SR_TotalWeight },
+        { classification: "起步", name: "起步筋板", L: SRib_Length, W: SRib_Width, T: SRib_Thickness, unitArea: SRib_UnitMetrics.area, unitWeight: SRib_UnitMetrics.weight, count: SRib_Count, totalArea: SRib_TotalArea, totalWeight: SRib_TotalWeight },
+        // 踏步
+        { classification: "踏步", name: "折板", L: TF_Length, W: TF_Width, T: TF_Thickness, unitArea: TF_UnitMetrics.area, unitWeight: TF_UnitMetrics.weight, count: TF_Count, totalArea: TF_TotalArea, totalWeight: TF_TotalWeight },
+        { classification: "踏步", name: "筋板", L: TR_Length, W: TR_Width, T: TR_Thickness, unitArea: TR_UnitMetrics.area, unitWeight: TR_UnitMetrics.weight, count: TR_Count, totalArea: TR_TotalArea, totalWeight: TR_TotalWeight },
+        // 平台
+        { classification: "平台", name: "折板", L: PF_Length, W: PF_Width, T: PF_Thickness, unitArea: PF_UnitMetrics.area, unitWeight: PF_UnitMetrics.weight, count: PF_Count, totalArea: PF_TotalArea, totalWeight: PF_TotalWeight },
+        { classification: "平台", name: "筋板", L: PRib_Length, W: PRib_Width, T: PRib_Thickness, unitArea: PRib_UnitMetrics.area, unitWeight: PRib_UnitMetrics.weight, count: PRib_Count, totalArea: PRib_TotalArea, totalWeight: PRib_TotalWeight },
+        // 封底
+        { classification: "封底", name: "底板", L: BP_Length, W: BP_Width, T: BP_Thickness, unitArea: BP_UnitMetrics.area, unitWeight: BP_UnitMetrics.weight, count: BP_Count, totalArea: BP_TotalArea, totalWeight: BP_TotalWeight },
+        // 侧梁部分 - 内侧板
+        { classification: "侧梁", name: "内侧板", L: IP_Length, W: IP_Width, T: IP_Thickness, unitArea: IP_UnitMetrics.area, unitWeight: IP_UnitMetrics.weight, count: IP_Count, totalArea: IP_TotalArea, totalWeight: IP_TotalWeight },
+        // 内侧箱梁外
+        { classification: "侧梁", name: "内侧箱梁外", L: IBO_Length, W: IBO_Width, T: IBO_Thickness, unitArea: IBO_UnitMetrics.area, unitWeight: IBO_UnitMetrics.weight, count: IBO_Count, totalArea: IBO_TotalArea, totalWeight: IBO_TotalWeight },
+        // 内侧箱梁盖板
+        { classification: "侧梁", name: "内侧箱梁盖板", L: IBC_Length, W: IBC_Width, T: IBC_Thickness, unitArea: IBC_UnitMetrics.area, unitWeight: IBC_UnitMetrics.weight, count: IBC_Count, totalArea: IBC_TotalArea, totalWeight: IBC_TotalWeight },
+        // 内侧箱梁筋板
+        { classification: "侧梁", name: "内侧箱梁筋板", L: IBR_Length, W: IBR_Width, T: IBR_Thickness, unitArea: IBR_UnitMetrics.area, unitWeight: IBR_UnitMetrics.weight, count: IBR_Count, totalArea: IBR_TotalArea, totalWeight: IBR_TotalWeight },
+        // 外侧板
+        { classification: "侧梁", name: "外侧板", L: OP_Length, W: OP_Width, T: OP_Thickness, unitArea: OP_UnitMetrics.area, unitWeight: OP_UnitMetrics.weight, count: OP_Count, totalArea: OP_TotalArea, totalWeight: OP_TotalWeight },
+        // 外侧箱梁外
+        { classification: "侧梁", name: "外侧箱梁外", L: OBO_Length, W: OBO_Width, T: OBO_Thickness, unitArea: OBO_UnitMetrics.area, unitWeight: OBO_UnitMetrics.weight, count: OBO_Count, totalArea: OBO_TotalArea, totalWeight: OBO_TotalWeight },
+        // 外侧箱梁盖板
+        { classification: "侧梁", name: "外侧箱梁盖板", L: OBC_Length, W: OBC_Width, T: OBC_Thickness, unitArea: OBC_UnitMetrics.area, unitWeight: OBC_UnitMetrics.weight, count: OBC_Count, totalArea: OBC_TotalArea, totalWeight: OBC_TotalWeight },
+        // 外侧箱梁筋板
+        { classification: "侧梁", name: "外侧箱梁筋板", L: OBR_Length, W: OBR_Width, T: OBR_Thickness, unitArea: OBR_UnitMetrics.area, unitWeight: OBR_UnitMetrics.weight, count: OBR_Count, totalArea: OBR_TotalArea, totalWeight: OBR_TotalWeight },
+    ];
+    
+    // 计算总重量
+    const totalWeight = materialData.reduce((sum, item) => sum + item.totalWeight, 0);
+
+    // 返回完整的V6.1计算结果
+    return {
+        geometricData: {
+            shape,
+            outerDiameter,
+            stepLength, stepWidth, stepHeight,
+            innerDiameter, middleDiameter, stepAngle, innerStepWidth, outerStepWidth,
+            totalEquivalentSteps, stairAngle, floorHeight, ribCount,
+            stepSlope, inclineAngle
+        },
+        materialData,
+        totalWeight,
+        // 用于显示公式的数据
+        formulas: {
+            E1: { L: E1_Length, W: E1_Width, count: E1_Count, term1: E1_Width_Term1 },
+            E2: { L: E2_Length, W: E2_Width, count: E2_Count, widthAdd: E2_Width_Add },
+            E3: { L: E3_Length, W: E3_Width, count: E3_Count },
+            ST: { L: ST_Length, W: ST_Width, count: ST_Count },
+            SR: { L: SR_Length, W: SR_Width, count: SR_Count },
+            SRib: { L: SRib_Length, W: SRib_Width, count: SRib_Count },
+            TF: { L: TF_Length, W: TF_Width, count: TF_Count },
+            TR: { L: TR_Length, W: TR_Width, count: TR_Count },
+            PF: { L: PF_Length, W: PF_Width, count: PF_Count },
+            PRib: { L: PRib_Length, W: PRib_Width, count: PRib_Count },
+            BP: { L: BP_Length, W: BP_Width, count: BP_Count },
+            IP: { L: IP_Length, W: IP_Width, count: IP_Count, baseHeight: IP_BaseHeight, maxInnerSlope },
+            IBO: { L: IBO_Length, W: IBO_Width, count: IBO_Count },
+            IBC: { L: IBC_Length, W: IBC_Width, count: IBC_Count, term1: IBC_Length_Term1, term2: IBC_Length_Term2 },
+            IBR: { L: IBR_Length, W: IBR_Width, count: IBR_Count },
+            OP: { L: OP_Length, W: OP_Width, count: OP_Count, baseHeight: OP_BaseHeight, maxOuterSlope },
+            OBO: { L: OBO_Length, W: OBO_Width, count: OBO_Count },
+            OBC: { L: OBC_Length, W: OBC_Width, count: OBC_Count, term1: OBC_Length_Term1, term2: OBC_Length_Term2 },
+            OBR: { L: OBR_Length, W: OBR_Width, count: OBR_Count }
+        },
+        sectionType: sectionType, // 添加梯段类型信息
+        isOnlySection: isOnlySection,
+        isLastMiddleWithoutExit: isLastMiddleWithoutExit,
+        isStartSection: isStartSection, // 添加是否为起步段的标志
+        effectiveLandingSteps: effectiveLandingSteps // 添加有效的落地步数
+    };
+}
+
+// 收集公共参数
+function collectCommonParameters() {
+    const constantsMode = document.querySelector('input[name="constantsMode"]:checked')?.value || 'default';
+    const thicknessMode = document.querySelector('input[name="thicknessMode"]:checked')?.value || 'default';
+    
+    let constants = constantsMode === 'custom' ? {
+        materialDensity: Number(document.getElementById("materialDensity").value) || 7850,
+        weldAllowance: Number(document.getElementById("weldAllowance").value) || 1.05,
+        safeFactor: Number(document.getElementById("safeFactor").value) || 1.20,
+        hanging: Number(document.getElementById("hanging").value) || 130,
+        foldingEdge: Number(document.getElementById("foldingEdge").value) || 25,
+        embedMargin: Number(document.getElementById("embedMargin").value) || 60,
+        finishThickness: Number(document.getElementById("finishThickness").value) || 50,
+        bottomKeel: Number(document.getElementById("bottomKeel").value) || 40,
+        singlePlateHeight: Number(document.getElementById("singlePlateHeight").value) || 1050,
+        glassSlotHeight: Number(document.getElementById("glassSlotHeight").value) || 100,
+        boxThickness: Number(document.getElementById("boxThickness").value) || 40,
+        exitEmbedWidth: Number(document.getElementById("exitEmbedWidth").value) || 500
+    } : DEFAULT_CONSTANTS;
+    
+    let thicknesses = thicknessMode === 'custom' ? {} : DEFAULT_THICKNESSES;
+    
+    if (thicknessMode === 'custom') {
+        const thicknessIds = [
+            'embedStart', 'embedExit', 'embedExitFlat',
+            'startTread', 'startRiser', 'startRib',
+            'treadFold', 'treadRib',
+            'platformFold', 'platformRib',
+            'bottomPlate',
+            'innerPlate', 'innerBoxOuter', 'innerBoxCover', 'innerBoxRib',
+            'outerPlate', 'outerBoxOuter', 'outerBoxCover', 'outerBoxRib'
+        ];
+        
+        thicknessIds.forEach(id => {
+            const input = document.getElementById(id);
+            if (input) {
+                thicknesses[id] = Number(input.value) || DEFAULT_THICKNESSES[id];
+            }
+        });
+    }
+    
+    return {
+        constantsMode,
+        thicknessMode,
+        constants,
+        thicknesses,
+        outerHandrail: document.getElementById("outerHandrail").value,
+        innerHandrail: document.getElementById("innerHandrail").value,
+        exitLevel: document.getElementById("exitLevel").value
+    };
+}
+
+// 开始计算所有梯段
+function startCalculation() {
+    // 检查是否至少配置了起步段
+    if (allSectionsData.length === 0) {
+        alert("请先配置至少一个梯段");
+        return;
+    }
+    
+    // 显示加载状态
+    const btn = document.querySelector('#step2 .btn-next');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<span class="loading"></span>计算中...';
+    btn.disabled = true;
+    
+    // 收集公共参数
+    globalCommonData = collectCommonParameters();
+    
+    // 开始计算
+    setTimeout(() => {
+        try {
+            calculateAllSections();
+        } catch (error) {
+            console.error("计算错误:", error);
+            document.getElementById("result").innerHTML = `
+                <div class="success-message" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);">
+                    计算过程中出现错误：${error.message}
+                </div>
+            `;
+        } finally {
+            // 恢复按钮状态
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    }, 100);
+}
+
+// 计算所有梯段
+function calculateAllSections() {
+    calculationResults = [];
+    summaryResults = {
+        totalWeight: 0,
+        totalArea: 0,
+        components: {},
+        sectionsCount: allSectionsData.length,
+        commonData: globalCommonData
+    };
+    
+    let resultHTML = `
+        <div class="success-message">
+            开始计算 ${allSectionsData.length} 个梯段...
+        </div>
+    `;
+    
+    document.getElementById("result").innerHTML = resultHTML;
+    
+    // 分析梯段配置
+    const hasExitSection = allSectionsData.some(s => s.sectionType === 'exit');
+    const isOnlyStartSection = allSectionsData.length === 1 && allSectionsData[0].sectionType === 'start';
+    const middleSections = allSectionsData.filter(s => s.sectionType === 'middle');
+    const lastMiddleIndex = middleSections.length - 1;
+    
+    console.log("梯段配置分析:", {
+        hasExitSection,
+        isOnlyStartSection,
+        middleSectionsCount: middleSections.length,
+        lastMiddleIndex
+    });
+    
+    allSectionsData.forEach((section, index) => {
+        // 准备额外的参数
+        const extraParams = {
+            sectionType: section.sectionType, // 传递正确的梯段类型
+            // 是否是最后一个中间段且没有出口段
+            isLastMiddleWithoutExit: !hasExitSection && 
+                                   section.sectionType === 'middle' && 
+                                   middleSections.indexOf(section) === lastMiddleIndex,
+            // 是否是唯一的起步段
+            isOnlySection: isOnlyStartSection && section.sectionType === 'start'
+        };
+        
+        console.log(`梯段 ${section.title} 的额外参数:`, extraParams);
+        
+        // 合并到公共数据中
+        const sectionCommonData = {
+            ...globalCommonData,
+            ...extraParams
+        };
+        
+        // 准备数据格式
+        const shape = section.modelType === 'circular' ? 'circular' : 'straight';
+        
+        const data = {
+            shape: shape,
+            outerDiameter: section.params['p-R'] || 0,
+            stepLength: section.params['p-step-length'] || 0,
+            stepWidth: section.params['p-w'] || 0,
+            stepHeight: section.params['p-h'] || 0,
+            stepCount: section.params['p-steps'] || 0,
+            platformCount: section.params['p-platforms'] || 0,
+            widthRatio: section.params['p-width-ratio'] || 0,
+            landingSteps: section.params['p-start-landing'] || 0 // 使用收集到的值，非起步段为0
+        };
+        
+        // 使用修改后的V6.1计算函数
+        const sectionResult = calculateV6(data, sectionCommonData);
+        
+        // 存储结果
+        calculationResults.push({
+            ...section,
+            data: data,
+            result: sectionResult,
+            extraParams: extraParams
+        });
+        
+        // 合并到汇总结果
+        mergeToSummary(sectionResult, section.title);
+    });
+    
+    // 显示计算结果
+    displaySortedResults();
+    
+    // 切换到第三步
+    updateStepIndicator(3);
+}
+
+// 合并到汇总结果
+function mergeToSummary(sectionResult, sectionTitle) {
+    sectionResult.materialData.forEach(comp => {
+        // 只汇总有数量的部件
+        if (comp.count <= 0) return;
+        
+        if (!summaryResults.components[comp.name]) {
+            summaryResults.components[comp.name] = {
+                name: comp.name,
+                classification: comp.classification,
+                totalWeight: 0,
+                totalArea: 0,
+                totalCount: 0,
+                sections: [],
+                // 记录规格信息（取第一个的规格）
+                L: comp.L,
+                W: comp.W,
+                T: comp.T,
+                unitArea: comp.unitArea,
+                unitWeight: comp.unitWeight
+            };
+        }
+        
+        summaryResults.components[comp.name].totalWeight += comp.totalWeight;
+        summaryResults.components[comp.name].totalArea += comp.totalArea;
+        summaryResults.components[comp.name].totalCount += comp.count;
+        summaryResults.components[comp.name].sections.push({
+            section: sectionTitle,
+            weight: comp.totalWeight,
+            area: comp.totalArea,
+            count: comp.count
+        });
+    });
+    
+    summaryResults.totalWeight += sectionResult.totalWeight;
+    summaryResults.totalArea += sectionResult.materialData.reduce((sum, comp) => sum + comp.totalArea, 0);
+}
+
+// 显示所有结果 - 按逻辑顺序排序
+function displaySortedResults() {
+    // 使用排序后的结果
+    const sortedResults = sortSectionsByType(calculationResults);
+    
+    let resultHTML = `
+        <div class="success-message">
+            ✅ 计算完成！共计算了 ${allSectionsData.length} 个梯段
+        </div>
+        <div class="info-message">
+            📋 注意：结果已按逻辑顺序排列（起步段 → 中间段 → 出口段）
+        </div>
+    `;
+    
+    // 显示各梯段结果
+    resultHTML += `<h3>📊 各梯段计算结果（点击展开查看完整V6.1结果）</h3>`;
+    
+    sortedResults.forEach((result, index) => {
+        const sectionResult = result.result;
+        const modelTypeName = result.modelType === 'circular' ? '正圆模型' : '直梯模型';
+        const sectionTypeIcon = result.sectionType === 'start' ? '🚀' : 
+                              result.sectionType === 'middle' ? '🔄' : '🏁';
+        
+        // 显示修正后的落地步数
+        const landingStepsDisplay = result.result.effectiveLandingSteps;
+        const landingStepsInfo = result.sectionType === 'start' ? 
+            `<span style="font-size: 0.9em; color: var(--gray); margin-left: 10px;">落地步数: ${landingStepsDisplay}</span>` : '';
+        
+        resultHTML += `
+            <div class="section-result">
+                <div class="section-result-header" onclick="toggleSectionResult(${result.index})">
+                    <div>
+                        <strong>${result.title}</strong>
+                        <span style="margin-left: 10px; padding: 2px 8px; background: ${result.modelType === 'circular' ? '#dbeafe' : '#dcfce7'}; color: ${result.modelType === 'circular' ? '#1d4ed8' : '#059669'}; border-radius: 4px; font-size: 12px;">
+                            ${modelTypeName}
+                        </span>
+                        <span style="margin-left: 5px; padding: 2px 8px; background: ${result.sectionType === 'start' ? '#fef3c7' : result.sectionType === 'middle' ? '#dbeafe' : '#dcfce7'}; color: ${result.sectionType === 'start' ? '#92400e' : result.sectionType === 'middle' ? '#1e40af' : '#065f46'}; border-radius: 4px; font-size: 12px;">
+                            ${result.sectionType === 'start' ? '起步段' : result.sectionType === 'middle' ? '中间段' : '出口段'}
+                        </span>
+                        <span style="margin-left: 5px; padding: 2px 8px; background: #f3f4f6; color: #6b7280; border-radius: 4px; font-size: 12px;">
+                            逻辑顺序: ${index + 1}
+                        </span>
+                        ${landingStepsInfo}
+                    </div>
+                    <div>
+                        <span style="color: var(--gray); margin-right: 10px;">总重量: <strong>${sectionResult.totalWeight.toFixed(1)} kg</strong></span>
+                        <span>${sectionTypeIcon}</span>
+                    </div>
+                </div>
+                <div class="section-result-content" id="section-content-${result.index}">
+                    ${generateV6ResultDisplay(result)}
+                </div>
+            </div>
+        `;
+    });
+    
+    document.getElementById("result").innerHTML = resultHTML;
+    
+    // 渲染MathJax公式
+    if (window.MathJax) {
+        window.MathJax.typesetPromise();
+    }
+}
+
+// 生成V6.1完整结果显示
+function generateV6ResultDisplay(result) {
+    const sectionResult = result.result;
+    const data = result.data;
+    const commonData = globalCommonData;
+    const isCircular = result.modelType === 'circular';
+    
+    const constantsMode = commonData.constantsMode;
+    const thicknessMode = commonData.thicknessMode;
+    const constants = commonData.constants;
+    const thicknesses = commonData.thicknesses;
+    
+    const stepLength = data.stepLength;
+    const stepWidth = data.stepWidth;
+    const stepHeight = data.stepHeight;
+    const outerDiameter = data.outerDiameter;
+    
+    const embedMargin = constants.embedMargin;
+    const hanging = constants.hanging;
+    const foldingEdge = constants.foldingEdge;
+    
+    const innerDiameter = sectionResult.geometricData.innerDiameter || 0;
+    const middleDiameter = sectionResult.geometricData.middleDiameter || 0;
+    const stepAngle = sectionResult.geometricData.stepAngle || 0;
+    const innerStepWidth = sectionResult.geometricData.innerStepWidth || stepWidth;
+    const outerStepWidth = sectionResult.geometricData.outerStepWidth || stepWidth;
+    const totalEquivalentSteps = sectionResult.geometricData.totalEquivalentSteps;
+    const stairAngle = sectionResult.geometricData.stairAngle || 0;
+    const floorHeight = sectionResult.geometricData.floorHeight;
+    const ribCount = sectionResult.geometricData.ribCount;
+    
+    const totalTreadCount = data.stepCount - sectionResult.effectiveLandingSteps - data.platformCount;
+    const platformCountEquiv = data.platformCount * data.widthRatio;
+    
+    const formulas = sectionResult.formulas;
+    
+    // 这里应该调用V6.1的显示函数，但为了简洁，我们直接生成HTML
+    return `
+        <h3>✅ 计算模式摘要</h3>
+        <p>当前计算使用: <strong>${isCircular ? '正圆螺旋梯' : '直跑楼梯'}</strong> + <strong>${constantsMode === 'custom' ? '自定义常量' : '默认常量'}</strong> + <strong>${thicknessMode === 'custom' ? '自定义厚度' : '默认厚度'}</strong>。</p>
+        
+        <div style="margin: 20px 0; padding: 15px; background: #f0f9ff; border-radius: 8px; border-left: 4px solid var(--primary);">
+            <p><strong>梯段类型:</strong> ${result.sectionType === 'start' ? '起步段' : result.sectionType === 'middle' ? '中间段' : '出口段'}</p>
+            <p><strong>有效落地步数:</strong> ${sectionResult.effectiveLandingSteps} ${result.sectionType === 'start' ? '(起步段)' : '(非起步段，为0)'}</p>
+            <p><strong>是否为起步段:</strong> ${sectionResult.isStartSection ? '是' : '否'}</p>
+        </div>
+        
+        <br>
+        
+        <h3>📝 当前计算使用的【常量参数】：</h3>
+        <div class="constants-display" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-top: 20px;">
+            <div class="constants-group" style="background: var(--light); padding: 20px; border-radius: 8px; border: 1px solid var(--gray-light);">
+                <h4 style="margin-top: 0; color: var(--primary); border-bottom: 1px solid var(--gray-light); padding-bottom: 10px;">材料及安全参数:</h4>
+                <pre style="margin: 0; white-space: pre-wrap; font-family: inherit;">钢材密度: ${constants.materialDensity} kg/m³
+焊缝余量: ${constants.weldAllowance}
+安全系数: ${constants.safeFactor}</pre>
+            </div>
+            <div class="constants-group" style="background: var(--light); padding: 20px; border-radius: 8px; border: 1px solid var(--gray-light);">
+                <h4 style="margin-top: 0; color: var(--primary); border-bottom: 1px solid var(--gray-light); padding-bottom: 10px;">构造及放样尺寸 (单位: mm):</h4>
+                <pre style="margin: 0; white-space: pre-wrap; font-family: inherit;">下挂: ${hanging}
+折边: ${foldingEdge}
+预埋放边: ${embedMargin}
+饰面厚度: ${constants.finishThickness}
+封底龙骨: ${constants.bottomKeel}</pre>
+            </div>
+            <div class="constants-group" style="background: var(--light); padding: 20px; border-radius: 8px; border: 1px solid var(--gray-light);">
+                <h4 style="margin-top: 0; color: var(--primary); border-bottom: 1px solid var(--gray-light); padding-bottom: 10px;">侧梁截面参数 (单位: mm):</h4>
+                <pre style="margin: 0; white-space: pre-wrap; font-family: inherit;">单钢板前口高: ${constants.singlePlateHeight}
+玻璃槽前口高: ${constants.glassSlotHeight}
+箱梁厚度: ${constants.boxThickness}
+出口预埋板宽度: ${constants.exitEmbedWidth}</pre>
+            </div>
+        </div>
+        
+        <hr style="border: 0; border-top: 1px dashed #ccc; margin: 25px 0;">
+        <h3>📊 ${isCircular ? '正圆螺旋梯' : '直跑楼梯'}钢板用量计算</h3>
+        ${generateMaterialTableV6(sectionResult.materialData, sectionResult.totalWeight, isCircular)}
+        
+        <div style="margin-top: 30px; text-align: center;">
+            <div class="export-buttons">
+                <button onclick="exportSingleToExcel(${result.index})" class="export-btn excel">
+                    <span class="icon">📊</span>
+                    <span>导出本梯段Excel报告</span>
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+// 生成V6.1用量表格 - 显示所有侧板数据
+function generateMaterialTableV6(materialData, totalWeight, isCircular) {
+    let tableBody = '';
+
+    // 分类分组 (用于 rowspan)
+    const classifications = {};
+    materialData.forEach(item => {
+        // 即使数量为0也显示
+        classifications[item.classification] = (classifications[item.classification] || 0) + 1;
+    });
+
+    for (let i = 0; i < materialData.length; i++) {
+        const item = materialData[i];
+        
+        // 不再跳过数量为0的部件，全部显示
+        
+        let classificationCell = '';
+        // 只有分组的第一个元素需要添加 rowspan
+        if (classifications[item.classification] > 0 && classifications[item.classification] !== -1) {
+            classificationCell = `<td rowspan="${classifications[item.classification]}">${item.classification}</td>`;
+            classifications[item.classification] = -1; // 标记为已使用，防止重复
+        }
+        
+        // 修正：如果 count 是整数，去掉 .000，否则保留三位小数
+        const countDisplay = (item.count % 1 === 0) ? item.count.toFixed(0) : item.count.toFixed(3);
+        
+        // 如果数量为0，用灰色显示
+        const countStyle = item.count === 0 ? 'style="color: #94a3b8; font-style: italic;"' : '';
+        const weightStyle = item.count === 0 ? 'style="color: #94a3b8; font-style: italic;"' : '';
+
+        // 厚度显示为整数
+        const thicknessDisplay = Math.round(item.T);
+
+        tableBody += `
+            <tr>
+                ${classificationCell}
+                <td>${item.name}</td>
+                <td>${Math.ceil(item.L)}</td>
+                <td>${Math.ceil(item.W)}</td>
+                <td>${thicknessDisplay}</td>
+                <td>${item.unitArea.toFixed(3)}</td>
+                <td>${item.unitWeight.toFixed(3)}</td>
+                <td ${countStyle}>${countDisplay}</td> 
+                <td>${item.totalArea.toFixed(3)}</td>
+                <td ${weightStyle}>${item.totalWeight.toFixed(1)}</td> 
+            </tr>
+        `;
+    }
+
+    return `
+        <table class="material-table">
+            <thead>
+                <tr>
+                    <th rowspan="2" colspan="2">钢板数量</th>
+                    <th colspan="3">规格 (单位: mm)</th>
+                    <th colspan="2" class="unit-quota-header">单位定额</th>
+                    <th colspan="3" class="quantity-stats-header">数量统计</th>
+                </tr>
+                <tr>
+                    <th>长</th>
+                    <th>宽</th>
+                    <th>厚</th>
+                    <th>面积 (m²)</th>
+                    <th>重量 (kg)</th>
+                    <th>数量</th>
+                    <th>面积 (m²)</th>
+                    <th>重量 (kg)</th>
+                </tr>
+                <tr>
+                    <th>分类</th>
+                    <th>名称</th>
+                    <th></th>
+                    <th></th>
+                    <th></th>
+                    <th></th>
+                    <th></th>
+                    <th></th>
+                    <th></th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                ${tableBody}
+                <tr class="total-row">
+                    <td colspan="7" class="total-label">合计重量</td>
+                    <td colspan="3" class="final-weight">${totalWeight.toFixed(1)} kg</td>
+                </tr>
+            </tbody>
+        </table>
+    `;
+}
+
+// ==================== 第四步：汇总报告 ====================
+function showSummaryReport() {
+    updateStepIndicator(4);
+    
+    // 使用排序后的结果
+    const sortedResults = sortSectionsByType(calculationResults);
+    
+    let summaryHTML = `
+        <div style="margin-top: 20px;">
+            <div class="info-message">
+                📋 注意：所有梯段已按逻辑顺序排列（起步段 → 中间段 → 出口段）
+            </div>
+            
+            <div class="summary-result">
+                <h4>📈 工程总量汇总</h4>
+                <p>总计 <strong>${summaryResults.sectionsCount}</strong> 个梯段，合并相同部件后的总量统计：</p>
+                
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin: 20px 0;">
+                    <div style="background: white; padding: 20px; border-radius: 8px; border: 2px solid var(--primary); text-align: center;">
+                        <div style="font-size: 0.9rem; color: var(--gray);">总重量</div>
+                        <div style="font-size: 2rem; font-weight: bold; color: var(--primary);">${summaryResults.totalWeight.toFixed(1)} kg</div>
+                    </div>
+                    <div style="background: white; padding: 20px; border-radius: 8px; border: 2px solid var(--secondary); text-align: center;">
+                        <div style="font-size: 0.9rem; color: var(--gray);">总面积</div>
+                        <div style="font-size: 2rem; font-weight: bold; color: var(--secondary);">${summaryResults.totalArea.toFixed(3)} m²</div>
+                    </div>
+                    <div style="background: white; padding: 20px; border-radius: 8px; border: 2px solid var(--accent); text-align: center;">
+                        <div style="font-size: 0.9rem; color: var(--gray);">部件种类</div>
+                        <div style="font-size: 2rem; font-weight: bold; color: var(--accent);">${Object.keys(summaryResults.components).length} 种</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="margin-top: 40px;">
+                <h4>📊 部件用量汇总表</h4>
+                <table class="material-table">
+                    <thead>
+                        <tr>
+                            <th>分类</th>
+                            <th>部件名称</th>
+                            <th>规格 (mm)</th>
+                            <th>总数量</th>
+                            <th>单位面积 (m²)</th>
+                            <th>单位重量 (kg)</th>
+                            <th>总面积 (m²)</th>
+                            <th>总重量 (kg)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${Object.values(summaryResults.components).map(comp => `
+                            <tr>
+                                <td>${comp.classification}</td>
+                                <td>${comp.name}</td>
+                                <td>${Math.ceil(comp.L)}×${Math.ceil(comp.W)}×${comp.T}</td>
+                                <td>${comp.totalCount}</td>
+                                <td>${comp.unitArea.toFixed(3)}</td>
+                                <td>${comp.unitWeight.toFixed(3)}</td>
+                                <td>${comp.totalArea.toFixed(3)}</td>
+                                <td>${comp.totalWeight.toFixed(1)}</td>
+                            </tr>
+                        `).join('')}
+                        <tr class="total-row">
+                            <td colspan="6"><strong>工程总量合计</strong></td>
+                            <td><strong>${summaryResults.totalArea.toFixed(3)}</strong></td>
+                            <td><strong>${summaryResults.totalWeight.toFixed(1)}</strong></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div style="margin-top: 40px;">
+                <h4>📈 各梯段贡献比例（按逻辑顺序）</h4>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; margin-top: 20px;">
+                    ${sortedResults.map((result, index) => {
+                        const weight = result.result.totalWeight;
+                        const percentage = summaryResults.totalWeight > 0 ? (weight / summaryResults.totalWeight * 100).toFixed(1) : 0;
+                        return `
+                            <div style="padding: 15px; background: var(--light); border-radius: 8px;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                    <span>
+                                        <strong>${result.title}</strong>
+                                        <span style="margin-left: 8px; padding: 2px 6px; background: #f3f4f6; color: #6b7280; border-radius: 4px; font-size: 11px;">
+                                            顺序: ${index + 1}
+                                        </span>
+                                    </span>
+                                    <span>${percentage}%</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; font-size: 0.9rem; color: var(--gray); margin-bottom: 5px;">
+                                    <span>${result.modelType === 'circular' ? '正圆模型' : '直梯模型'} · ${result.sectionType === 'start' ? '起步段' : result.sectionType === 'middle' ? '中间段' : '出口段'}</span>
+                                    <span>${weight.toFixed(1)} kg</span>
+                                </div>
+                                <div style="height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden;">
+                                    <div style="height: 100%; width: ${percentage}%; background: ${index % 3 === 0 ? 'var(--primary)' : index % 3 === 1 ? 'var(--secondary)' : 'var(--accent)'};"></div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+            
+            <div class="export-buttons" style="margin-top: 40px;">
+                <button onclick="exportSummaryToExcel()" class="export-btn excel">
+                    <span class="icon">📊</span>
+                    <span>导出Excel汇总报告</span>
+                </button>
+                
+                <button onclick="exportSummaryToTXT()" class="export-btn txt">
+                    <span class="icon">📝</span>
+                    <span>导出文本汇总报告</span>
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById("summaryResult").innerHTML = summaryHTML;
+}
+
+// ==================== 界面交互功能 ====================
+// 切换梯段结果显示
+function toggleSectionResult(index) {
+    const content = document.getElementById(`section-content-${index}`);
+    if (content.classList.contains('show')) {
+        content.classList.remove('show');
+    } else {
+        content.classList.add('show');
+    }
+}
+
+// ==================== 导出功能 ====================
+// 导出单个梯段报告
+function exportSingleToExcel(index) {
+    const result = calculationResults[index];
+    if (!result) return;
+    
+    try {
+        const wb = XLSX.utils.book_new();
+        const wsData = XLSX.utils.table_to_sheet(document.querySelector(`#section-content-${index} .material-table`));
+        XLSX.utils.book_append_sheet(wb, wsData, `${result.title}用量`);
+        
+        const fileName = `梯段_${result.title}_${new Date().getTime()}.xlsx`;
+        XLSX.writeFile(wb, fileName);
+        
+        showExportSuccess(`${result.title} Excel报告已生成！`);
+    } catch (error) {
+        alert('导出失败：' + error.message);
+    }
+}
+
+// 导出汇总报告到Excel
+function exportSummaryToExcel() {
+    try {
+        const wb = XLSX.utils.book_new();
+        
+        // 1. 创建汇总工作表
+        const summaryData = [
+            ['楼梯分段测算汇总报告'],
+            ['生成时间', new Date().toLocaleString()],
+            ['梯段总数', summaryResults.sectionsCount],
+            ['总重量 (kg)', summaryResults.totalWeight.toFixed(1)],
+            ['总面积 (m²)', summaryResults.totalArea.toFixed(3)],
+            ['部件种类', Object.keys(summaryResults.components).length],
+            [''],
+            ['各梯段信息（按逻辑顺序）'],
+            ['逻辑顺序', '梯段名称', '模型类型', '梯段类型', '重量 (kg)', '占比 (%)']
+        ];
+        
+        const sortedResults = sortSectionsByType(calculationResults);
+        sortedResults.forEach((result, index) => {
+            const weight = result.result.totalWeight;
+            const percentage = summaryResults.totalWeight > 0 ? (weight / summaryResults.totalWeight * 100).toFixed(1) : 0;
+            summaryData.push([
+                index + 1,
+                result.title,
+                result.modelType === 'circular' ? '正圆模型' : '直梯模型',
+                result.sectionType === 'start' ? '起步段' : result.sectionType === 'middle' ? '中间段' : '出口段',
+                weight.toFixed(1),
+                percentage
+            ]);
+        });
+        
+        const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
+        
+        // 2. 创建部件汇总工作表
+        const componentData = [
+            ['部件用量汇总'],
+            ['分类', '部件名称', '规格 (mm)', '总数量', '单位面积 (m²)', '单位重量 (kg)', '总面积 (m²)', '总重量 (kg)']
+        ];
+        
+        Object.values(summaryResults.components).forEach(comp => {
+            componentData.push([
+                comp.classification,
+                comp.name,
+                `${Math.ceil(comp.L)}×${Math.ceil(comp.W)}×${comp.T}`,
+                comp.totalCount,
+                comp.unitArea.toFixed(3),
+                comp.unitWeight.toFixed(3),
+                comp.totalArea.toFixed(3),
+                comp.totalWeight.toFixed(1)
+            ]);
+        });
+        
+        componentData.push(['', '', '', '', '', '', '合计', summaryResults.totalWeight.toFixed(1)]);
+        
+        const wsComponents = XLSX.utils.aoa_to_sheet(componentData);
+        
+        // 3. 添加工作表到工作簿
+        XLSX.utils.book_append_sheet(wb, wsSummary, '汇总信息');
+        XLSX.utils.book_append_sheet(wb, wsComponents, '部件汇总');
+        
+        // 保存Excel文件
+        const fileName = `楼梯分段汇总报告_${new Date().getTime()}.xlsx`;
+        XLSX.writeFile(wb, fileName);
+        
+        showExportSuccess('Excel汇总报告已生成并开始下载！');
+        
+    } catch (error) {
+        console.error('生成Excel失败:', error);
+        alert('生成Excel汇总报告时出现错误：' + error.message);
+    }
+}
+
+// 导出汇总报告到TXT
+function exportSummaryToTXT() {
+    try {
+        const sortedResults = sortSectionsByType(calculationResults);
+        
+        let reportContent = '='.repeat(70) + '\n';
+        reportContent += '楼梯分段测算汇总报告\n';
+        reportContent += '='.repeat(70) + '\n\n';
+        
+        // 基本信息
+        reportContent += '【基本信息】\n';
+        reportContent += `生成时间: ${new Date().toLocaleString()}\n`;
+        reportContent += `梯段总数: ${summaryResults.sectionsCount}\n`;
+        reportContent += `总重量: ${summaryResults.totalWeight.toFixed(1)} kg\n`;
+        reportContent += `总面积: ${summaryResults.totalArea.toFixed(3)} m²\n`;
+        reportContent += `部件种类: ${Object.keys(summaryResults.components).length} 种\n\n`;
+        
+        // 各梯段信息（按逻辑顺序）
+        reportContent += '【各梯段信息（按逻辑顺序）】\n';
+        reportContent += '-'.repeat(100) + '\n';
+        sortedResults.forEach((result, index) => {
+            const weight = result.result.totalWeight;
+            const percentage = summaryResults.totalWeight > 0 ? (weight / summaryResults.totalWeight * 100).toFixed(1) : 0;
+            reportContent += `${(index + 1).toString().padStart(2)}. ${result.title.padEnd(15)} ${(result.modelType === 'circular' ? '正圆' : '直梯').padEnd(8)} ${(result.sectionType === 'start' ? '起步段' : result.sectionType === 'middle' ? '中间段' : '出口段').padEnd(8)} ${weight.toFixed(1).padStart(8)} kg ${percentage.padStart(5)}%\n`;
+        });
+        
+        reportContent += '\n【部件用量汇总】\n';
+        reportContent += '-'.repeat(120) + '\n';
+        
+        Object.values(summaryResults.components).forEach(comp => {
+            reportContent += `${comp.classification.padEnd(8)} ${comp.name.padEnd(15)} ${Math.ceil(comp.L).toString().padStart(6)}×${Math.ceil(comp.W).toString().padStart(6)}×${comp.T.toString().padStart(3)} mm 数量: ${comp.totalCount.toString().padStart(4)} 重量: ${comp.totalWeight.toFixed(1).padStart(8)} kg\n`;
+        });
+        
+        reportContent += '\n' + '='.repeat(70) + '\n';
+        reportContent += '楼梯分段测算系统 V7.0 - 多梯段整合版\n';
+        reportContent += '='.repeat(70) + '\n';
+        
+        // 创建Blob并下载
+        const blob = new Blob([reportContent], { type: 'text/plain;charset=utf-8' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `楼梯分段汇总报告_${new Date().getTime()}.txt`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        showExportSuccess('文本汇总报告已生成并开始下载！');
+        
+    } catch (error) {
+        console.error('生成文本报告失败:', error);
+        alert('生成文本汇总报告时出现错误：' + error.message);
+    }
+}
+
+// 显示导出成功消息
+function showExportSuccess(message) {
+    const successDiv = document.createElement('div');
+    successDiv.className = 'success-message';
+    successDiv.style.animation = 'fadeIn 0.5s ease';
+    successDiv.innerHTML = `
+        <span style="font-size: 20px; margin-right: 10px;">✓</span>
+        <span>${message}</span>
+    `;
+    
+    const currentStep = document.querySelector('.step-active').id;
+    const resultArea = document.getElementById(currentStep === 'step4' ? 'summaryResult' : 'result');
+    resultArea.insertBefore(successDiv, resultArea.firstChild);
+    
+    // 3秒后自动移除消息
+    setTimeout(() => {
+        if (successDiv.parentNode) {
+            successDiv.style.opacity = '0';
+            successDiv.style.transition = 'opacity 0.5s ease';
+            setTimeout(() => {
+                if (successDiv.parentNode) {
+                    successDiv.parentNode.removeChild(successDiv);
+                }
+            }, 500);
+        }
+    }, 3000);
+}
+</script>
+</body>
+</html>
